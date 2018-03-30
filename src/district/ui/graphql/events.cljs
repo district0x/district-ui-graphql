@@ -123,7 +123,7 @@
   interceptors
   (fn [{:keys [:db]} [{:keys [:query-str :query-configs]}]]
     {:dispatch-n [[::assoc-queries-with-merged-query {:merged-query-str query-str
-                                                       :query-configs query-configs}]
+                                                      :query-configs query-configs}]
                   [::set-query-loading {:query-str query-str
                                         :loading? true}]]}))
 

@@ -1,10 +1,11 @@
 (ns district.ui.graphql.effects
   (:require
     [cljsjs.graphql]
+    [clojure.string :as string]
+    [district.cljs-utils :as cljs-utils]
     [district.graphql-utils :as graphql-utils]
     [district.ui.graphql.utils :as utils]
-    [re-frame.core :refer [reg-fx dispatch]]
-    [district.cljs-utils :as cljs-utils]))
+    [re-frame.core :refer [reg-fx dispatch]]))
 
 (def print-str-graphql (aget js/GraphQL "print"))
 
@@ -28,18 +29,21 @@
                                 :query-str (print-str-graphql query)
                                 :variables variables})
 
-          fetcher-promise (fetcher (clj->js {:query (:query-str req-opts) :variables variables}))]
+          fetcher-promise (when-not (empty? (string/trim (:query-str req-opts)))
+                            (fetcher (clj->js {:query (:query-str req-opts) :variables variables})))]
+
+      (println (print-str-graphql query))
 
       (.catch (.then (js/Promise.all (clj->js (concat responses [fetcher-promise])))
                      (fn [resps]
                        (let [res (reduce (fn [acc res]
-                                           (cljs-utils/merge-in
-                                             acc
-                                             (graphql-utils/js->clj-response res {:gql-name->kw gql-name->kw})))
+                                           (.log js/console res)
+                                           (let [res (graphql-utils/js->clj-response res {:gql-name->kw gql-name->kw})]
+                                             (utils/merge-in-colls acc (print.foo/look res))))
                                          {}
                                          resps)]
                          (when on-response
-                           (dispatch (vec (concat on-response [res req-opts]))))
+                           (dispatch (vec (concat on-response [(print.foo/look res) req-opts]))))
                          (if (empty? (:errors res))
                            (when on-success
                              (dispatch (vec (concat on-success [(:data res) req-opts]))))

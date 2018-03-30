@@ -42,20 +42,23 @@
    :value name})
 
 
-(defn- ancestors->query-path [ancestors]
+(defn- ancestors->query-path [ancestors & [{:keys [:use-aliases? :gql-name->kw]
+                                            :or {gql-name->kw identity}}]]
   (->> ancestors
     (remove (fn [node]
-              (= (aget node "kind") "OperationDefinition")))
+              (or (not node)
+                  (= (aget node "kind") "OperationDefinition"))))
     (map (fn [node]
            (cond
-             #_(aget node "alias")
-             #_(aget node "alias" "value")
+             (and use-aliases?
+                  (aget node "alias"))
+             (gql-name->kw (aget node "alias" "value"))
 
              (= (aget node "kind") "FragmentDefinition")
-             {:typename (aget node "typeCondition" "name" "value")}
+             {:typename (gql-name->kw (aget node "typeCondition" "name" "value"))}
 
              (aget node "name")
-             (aget node "name" "value")
+             (gql-name->kw (aget node "name" "value"))
 
              :else nil)))
     (remove nil?)
@@ -129,7 +132,7 @@
   (get-in entities [type id]))
 
 
-(defn- merge-in-colls [existing-val new-val]
+(defn- merge-in-colls2 [existing-val new-val]
   (if (and (sequential? existing-val)
            (sequential? new-val))
     (mapv (partial reduce cljs-utils/merge-in)
@@ -137,20 +140,51 @@
     (cljs-utils/merge-in existing-val new-val)))
 
 
+(letfn [(merge-in-colls* [a b]
+          (cond
+            (map? a)
+            (merge-with merge-in-colls* a b)
+
+            (and (sequential? a)
+                 (sequential? b))
+            (map (partial reduce cljs-utils/merge-in)
+                 (partition 2 (interleave a b)))
+
+            :else b))]
+  (defn merge-in-colls
+    "Merge multiple nested maps. Merges maps in collections as well"
+    [& args]
+    (reduce merge-in-colls* nil args)))
+
+
+(defn- remove-nil-vals [form]
+  (walk/postwalk (fn [x]
+                   x
+                   #_(if (map? x)
+                       (into {} (remove (fn [[k v]]
+                                          (nil? v))
+                                        x))
+                       x))
+                 form))
+
+
 (defn response-replace-aliases [data {:keys [:query] :as query-clj}]
   (walk/postwalk (fn [node]
                    (try
                      (let [dectx-node (contextual/decontextualize node)]
 
-                       (if (map? dectx-node)
-                         (let [path (seq (remove number? (contextual/context node)))]
-                           (reduce
-                             (fn [acc [key value]]
-                               (let [{:keys [:name :args]} (meta (get-in query (concat path [key])))]
-                                 (update-in acc (remove nil? [(or name key) args]) merge-in-colls value)))
-                             {}
-                             dectx-node))
-                         dectx-node))
+                       (try
+                         (if (map? dectx-node)
+                           (let [path (seq (remove number? (contextual/context node)))]
+                             (reduce
+                               (fn [acc [key value]]
+                                 (let [{:keys [:name :args]} (meta (get-in query (concat path [key])))]
+                                   (update-in acc (remove nil? [(or name key) args]) merge-in-colls2 value)))
+                               {}
+                               dectx-node))
+                           dectx-node)
+                         (catch :default _
+                           dectx-node)))
                      (catch :default _
                        node)))
                  (contextual/contextualize data)))
@@ -181,23 +215,25 @@
                 (fn [node]
                   (try
                     (let [dectx-node (contextual/decontextualize node)]
+                      (try
+                        (if (map? dectx-node)
+                          (let [path (seq (remove number? (contextual/context node)))
+                                id-field-names (:id-field-names (meta (get-in query path)))]
+                            (cond
+                              (entity? dectx-node id-field-names)
+                              (let [dectx-node (update dectx-node (:typename-field opts) (:gql-name->kw opts))
+                                    ref (get-ref dectx-node id-field-names opts)]
+                                (swap! entities #(update-entity % ref dectx-node))
+                                ref)
 
-                      (if (map? dectx-node)
-                        (let [path (seq (remove number? (contextual/context node)))
-                              id-field-names (:id-field-names (meta (get-in query path)))]
-                          (cond
-                            (entity? dectx-node id-field-names)
-                            (let [dectx-node (update dectx-node (:typename-field opts) (:gql-name->kw opts))
-                                  ref (get-ref dectx-node id-field-names opts)]
-                              (swap! entities #(update-entity % ref dectx-node))
-                              ref)
+                              (contains-typename? dectx-node opts)
+                              (let [dectx-node (update dectx-node (:typename-field opts) (:gql-name->kw opts))]
+                                dectx-node)
 
-                            (contains-typename? dectx-node opts)
-                            (let [dectx-node (update dectx-node (:typename-field opts) (:gql-name->kw opts))]
-                              dectx-node)
-
-                            :else dectx-node))
-                        dectx-node))
+                              :else dectx-node))
+                          dectx-node)
+                        (catch :default _
+                          dectx-node)))
                     (catch :default _
                       node)))
                 (contextual/contextualize data))]
@@ -211,6 +247,7 @@
 
   (-> data
     (response-replace-aliases query-clj)
+    (->> (walk/postwalk identity))
     (replace-entities-with-refs (query-clj-replace-aliases query-clj) opts)))
 
 
