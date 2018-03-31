@@ -18,27 +18,34 @@
 (reg-fx
   ::fetch
   (fn [{:keys [:fetcher :query :variables :on-success :on-error :on-request :on-response :gql-name->kw
-               :query-middlewares] :as opts}]
+               :query-middlewares :schema] :as opts}]
 
     (let [non-middleware-fields [:on-error :on-request :on-response :on-success]
 
-          {:keys [:query :variables :responses]}
+          {:keys [:query :variables :queries :responses]}
           (utils/apply-query-middlewares query-middlewares (apply dissoc opts non-middleware-fields))
+
+          query-clj (apply utils/merge-in-colls (map (fn [q]
+                                                       (utils/query->clj q schema {:gql-name->kw gql-name->kw
+                                                                                   :variables variables}))
+                                                     queries))
 
           req-opts (merge opts {:query query
                                 :query-str (print-str-graphql query)
+                                :query-clj query-clj
                                 :variables variables})
 
-          fetcher-promise (when-not (empty? (string/trim (:query-str req-opts)))
+          fetcher-promise (when (and fetcher
+                                     (not (empty? (string/trim (:query-str req-opts)))))
                             (fetcher (clj->js {:query (:query-str req-opts) :variables variables})))]
 
-      (println (print-str-graphql query))
+      (println "finalq: " (print-str-graphql query))
 
       (.catch (.then (js/Promise.all (clj->js (concat responses [fetcher-promise])))
                      (fn [resps]
                        (let [res (reduce (fn [acc res]
-                                           (.log js/console res)
-                                           (let [res (graphql-utils/js->clj-response res {:gql-name->kw gql-name->kw})]
+                                           (let [res (-> (graphql-utils/js->clj-response res {:gql-name->kw gql-name->kw})
+                                                       utils/remove-nil-vals)]
                                              (utils/merge-in-colls acc (print.foo/look res))))
                                          {}
                                          resps)]

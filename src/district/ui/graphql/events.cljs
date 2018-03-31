@@ -5,14 +5,16 @@
     [day8.re-frame.forward-events-fx]
     [district.graphql-utils :as graphql-utils]
     [district.ui.graphql.effects :as effects]
+    [district.ui.graphql.middleware.id-fields :refer [id-fields-middleware]]
+    [district.ui.graphql.middleware.typenames :refer [typenames-middleware]]
     [district.ui.graphql.queries :as queries]
-    [district.ui.graphql.query-middlewares :refer [add-id-fields-middleware create-add-fields-middleware middleware]]
     [district.ui.graphql.utils :as utils]
     [graphql-query.core :refer [graphql-query]]
     [re-frame.core :refer [reg-event-fx trim-v]]))
 
 (def interceptors [trim-v])
 (def build-schema (aget js/GraphQL "buildSchema"))
+
 
 (reg-event-fx
   ::start
@@ -37,8 +39,8 @@
                   :schema (-> (build-schema schema)
                             (graphql-utils/add-keyword-type {:disable-serialize? true})
                             (graphql-utils/add-date-type {:disable-serialize? true}))
-                  :query-middlewares (concat [(middleware :add-id-fields add-id-fields-middleware)
-                                              (create-add-fields-middleware :add-typename ["__typename"])]
+                  :query-middlewares (concat [(utils/create-middleware :id-fields id-fields-middleware)
+                                              (utils/create-middleware :typenames typenames-middleware)]
                                              query-middlewares)}
                  (select-keys opts [:typename-field :kw->gql-name :gql-name->kw]))))})))
 
@@ -68,18 +70,8 @@
 (reg-event-fx
   ::normalize-response
   interceptors
-  (fn [{:keys [:db]} [response {:keys [:query :query-clj :variables]}]]
-    (let [query-clj (if-not query-clj
-                      (utils/query->clj query
-                                        (queries/config db :schema)
-                                        {:gql-name->kw (queries/config db :gql-name->kw)
-                                         :variables variables})
-                      query-clj)
-          results (utils/normalize-response response
-                                            query-clj
-                                            (select-keys (queries/config db) [:typename-field
-                                                                              :kw->gql-name
-                                                                              :gql-name->kw]))]
+  (fn [{:keys [:db]} [response {:keys [:query-clj]}]]
+    (let [results (utils/normalize-response response query-clj (queries/config db))]
       {:db (queries/merge-results db results)})))
 
 

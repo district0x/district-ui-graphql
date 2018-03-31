@@ -55,7 +55,8 @@
              (gql-name->kw (aget node "alias" "value"))
 
              (= (aget node "kind") "FragmentDefinition")
-             {:typename (gql-name->kw (aget node "typeCondition" "name" "value"))}
+             {:typename (gql-name->kw (aget node "typeCondition" "name" "value"))
+              :fragment (keyword (gql-name->kw (aget node "name" "value")))}
 
              (aget node "name")
              (gql-name->kw (aget node "name" "value"))
@@ -140,15 +141,24 @@
     (cljs-utils/merge-in existing-val new-val)))
 
 
+(defn- ensure-count [map-seq c]
+  (concat map-seq (repeat (max (- c (count map-seq)) 0)
+                          (if-let [typename (:__typename(first map-seq))]
+                            {:__typename typename}
+                            {}))))
+
 (letfn [(merge-in-colls* [a b]
           (cond
             (map? a)
             (merge-with merge-in-colls* a b)
 
             (and (sequential? a)
-                 (sequential? b))
-            (map (partial reduce cljs-utils/merge-in)
-                 (partition 2 (interleave a b)))
+                 (sequential? b)
+                 (or (map? (first a))
+                     (map? (first b))))
+            (let [c (max (count a) (count b))]
+              (mapv (partial reduce merge-in-colls*)
+                    (partition 2 (interleave (ensure-count a c) (ensure-count b c)))))
 
             :else b))]
   (defn merge-in-colls
@@ -157,14 +167,11 @@
     (reduce merge-in-colls* nil args)))
 
 
-(defn- remove-nil-vals [form]
+(defn remove-nil-vals [form]
   (walk/postwalk (fn [x]
-                   x
-                   #_(if (map? x)
-                       (into {} (remove (fn [[k v]]
-                                          (nil? v))
-                                        x))
-                       x))
+                   (if (map? x)
+                     (into {} (remove #(nil? (second %)) x))
+                     x))
                  form))
 
 
@@ -242,7 +249,6 @@
 
 
 (defn normalize-response [data query-clj opts]
-  #_(print.foo/look (:query query-clj))
   #_(ppm (:query query-clj))
 
   (-> data
@@ -380,7 +386,7 @@
     arg))
 
 
-(defn merge-queries [query-configs]
+(defn merge-queries [& query-configs]
   (let [query-configs (map #(select-keys % [:query :variables])
                            (js->clj query-configs :keywordize-keys true))]
     (-> (rest query-configs)
@@ -417,7 +423,7 @@
         (fn [query-configs]
           (let [query-configs (vec query-configs)
                 {:merged-query :query
-                 :merged-variables :variables} (merge-queries query-configs)
+                 :merged-variables :variables} (apply merge-queries query-configs)
                 req-opts (merge opts
                                 {:query merged-query
                                  :variables merged-variables
@@ -447,16 +453,22 @@
     {:query-str (print-str-graphql query)
      :query query}))
 
+(defn create-middleware [id middleware-fn]
+  {:id id
+   :fn middleware-fn})
 
 (defn apply-query-middlewares [middlewares {:keys [:query :variables] :as opts}]
   (let [results (doall
                   (reduce (fn [acc middleware]
                             (let [{:keys [:query :variables :response]} ((:fn middleware) (merge opts acc))]
                               {:query (or query (:query acc))
+                               :queries (if query
+                                          (conj (:queries acc) query)
+                                          (:queries acc))
                                :variables (or variables (:variables acc))
                                :responses (if response
                                             (conj (:responses acc) response)
                                             (:responses acc))}))
-                          {:query query :variables variables :responses []}
+                          {:query query :variables variables :queries [query] :responses []}
                           middlewares))]
     results))
