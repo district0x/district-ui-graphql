@@ -143,7 +143,7 @@
 
 (defn- ensure-count [map-seq c]
   (concat map-seq (repeat (max (- c (count map-seq)) 0)
-                          (if-let [typename (:__typename(first map-seq))]
+                          (if-let [typename (:__typename (first map-seq))]
                             {:__typename typename}
                             {}))))
 
@@ -472,3 +472,42 @@
                           {:query query :variables variables :queries [query] :responses []}
                           middlewares))]
     results))
+
+
+(defn remove-unused-definitions [query]
+  (.log js/console query)
+  (let [used-variables (atom #{})]
+
+    (visit query (clj->js {:Variable
+                           {:leave (fn [node key parent path]
+                                     (when-not (= "VariableDefinition" (aget parent "kind"))
+                                       (swap! used-variables #(conj % (aget node "name" "value"))))
+                                     js/undefined)}}))
+
+    (let [new-query (visit query (clj->js {:OperationDefinition
+                                           {:leave (fn [node key parent path]
+                                                     (if (and (= (aget node "operation") "query")
+                                                              (seq (aget node "variableDefinitions")))
+                                                       (let [node (clj->js (js->clj node))
+                                                             new-defs (remove
+                                                                        (fn [def]
+                                                                          (or (not (aget def "variable"))
+                                                                              (not (contains? @used-variables (aget def "variable" "name" "value")))))
+                                                                        (aget node "variableDefinitions"))]
+                                                         (aset node "variableDefinitions" (clj->js new-defs))
+                                                         node)
+                                                       js/undefined))}
+                                           :Variable
+                                           {:leave (fn [node key parent path]
+                                                     (if (and (= "VariableDefinition" (aget parent "kind"))
+                                                              (not (contains? @used-variables (aget node "name" "value"))))
+                                                       nil
+                                                       js/undefined))}
+                                           :VariableDefinition
+                                           {:leave (fn [node]
+                                                     (when (or (not (aget node "variable"))
+                                                               (contains? @used-variables (aget node "variable" "name" "value")))
+                                                       js/undefined))}}))]
+
+      new-query)))
+

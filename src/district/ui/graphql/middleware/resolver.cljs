@@ -88,29 +88,31 @@
                   graphql-utils/js->clj-response
                   response-remove-seqs)
             res-data (:data res)
-            new-query (visit query #js {:leave (fn [node key parent path ancestors]
-                                                 (condp = (aget node "kind")
-                                                   "OperationDefinition"
-                                                   (if (and (aget node "selectionSet")
-                                                            (not (seq (aget node "selectionSet" "selections"))))
-                                                     nil
-                                                     js/undefined)
+            new-query (-> query
+                        (visit #js {:leave (fn [node key parent path ancestors]
+                                             (condp = (aget node "kind")
+                                               "OperationDefinition"
+                                               (if (and (aget node "selectionSet")
+                                                        (not (seq (aget node "selectionSet" "selections"))))
+                                                 nil
+                                                 js/undefined)
 
-                                                   "Field"
-                                                   (let [q-path
-                                                         (utils/ancestors->query-path (concat ancestors [parent node])
-                                                                                      {:use-aliases? true
-                                                                                       :gql-name->kw gql-name->kw})
-                                                         mask-value (get-in res-data q-path)]
-                                                     (if (and (seq q-path)
-                                                              (or (and (not (nil? mask-value))
-                                                                       (not (map? mask-value)))
-                                                                  (and (aget node "selectionSet")
-                                                                       (not (seq (aget node "selectionSet" "selections"))))))
-                                                       nil
-                                                       js/undefined))
+                                               "Field"
+                                               (let [q-path
+                                                     (utils/ancestors->query-path (concat ancestors [parent node])
+                                                                                  {:use-aliases? true
+                                                                                   :gql-name->kw gql-name->kw})
+                                                     mask-value (get-in res-data q-path)]
+                                                 (if (and (seq q-path)
+                                                          (or (and (not (nil? mask-value))
+                                                                   (not (map? mask-value)))
+                                                              (and (aget node "selectionSet")
+                                                                   (not (seq (aget node "selectionSet" "selections"))))))
+                                                   nil
+                                                   js/undefined))
 
-                                                   js/undefined))})]
+                                               js/undefined))})
+                        utils/remove-unused-definitions)]
 
         {:query new-query
          :response (gql schema
@@ -119,3 +121,4 @@
                         context
                         variables
                         nil)}))))
+

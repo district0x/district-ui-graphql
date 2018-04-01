@@ -363,7 +363,6 @@
                                                  (js/Promise. (fn [resolve]
                                                                 (resolve 2))))
                                       :user/address "Street 2"
-                                      :user/active? false
                                       :user/status (fn []
                                                      (js/Promise. (fn [resolve]
                                                                     (resolve :user.status/active))))
@@ -424,7 +423,9 @@
                                                   {:user/id 1
                                                    :user/active? true})}))})
 
-    (let [query1 (subscribe [::subs/query {:queries [[:search-users
+    (let [query1 (subscribe [::subs/query {:operation {:operation/type :query
+                                                       :operation/name :some-query}
+                                           :queries [[:search-users
                                                       {:user/registered-after (t/date-time 2018 10 10)}
                                                       [:total-count
                                                        [:items [:user/address
@@ -432,8 +433,11 @@
                                                                 :user/status
                                                                 :user/active?
                                                                 :user/favorite-numbers
-                                                                [:user/params {:param/other-key "kek"}
-                                                                 [:param/db :param/other-key]]]]]]]}])
+                                                                [:user/params {:param/other-key :$c}
+                                                                 [:param/db :param/other-key]]]]]]]
+                                           :variables [{:variable/name :$c
+                                                        :variable/type :String!}]}
+                             {:variables {:c "kek"}}])
 
           query2 (subscribe [::subs/query
                              {:operation {:operation/type :query
@@ -458,8 +462,8 @@
         (print.foo/look @(subscribe [::subs/entities]))
         (print.foo/look @(subscribe [::subs/graph]))
 
-        (print.foo/look @query1)
-        (print.foo/look @query2)
+        #_(print.foo/look @query1)
+        #_(print.foo/look @query2)
 
         (let [{:keys [:items :total-count]} (:search-users @query1)
               {:keys [:user/address :user/registered-on :user/status :user/favorite-numbers :user/params :user/active?]}
@@ -470,6 +474,8 @@
           (is (= status :user.status/active))
           (is (= favorite-numbers [9 8 7]))
           (is (= params [{:param/db "d", :param/other-key "77"}]))
+
+          ;; tricky, because active? of second query should override "true", since user id is the same
           (is (false? active?))
 
           (is (= "Street 2" (:user/address @(subscribe [::subs/entity :user 2]))))
