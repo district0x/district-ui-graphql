@@ -21,7 +21,7 @@
       :else nil)))
 
 
-(defn typenames-middleware [{:keys [:query :schema :variables]}]
+(defn typenames-middleware [{:keys [:query :schema :variables :kw->gql-name]}]
   (let [typename-field (clj->js (utils/create-field-node "__typename"))
         typenames-query (visit query
                                #js {:leave (fn [node key parent path ancestors]

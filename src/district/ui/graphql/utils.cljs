@@ -8,28 +8,16 @@
     [clojure.walk :as walk]
     [contextual.core :as contextual]
     [district.cljs-utils :as cljs-utils]
+    [district.graphql-utils :as graphql-utils]
     [graphql-query.core :refer [graphql-query]]
     [print.foo :include-macros true]
     [re-frame.core :refer [dispatch dispatch-sync]]))
 
-
 (def parse-graphql (aget js/GraphQL "parse"))
 (def print-str-graphql (aget js/GraphQL "print"))
 (def visit (aget js/GraphQL "visit"))
-
-(set! *print-meta* true)
-
-(defn ppm [obj]
-  (let [orig-dispatch cljs.pprint/*print-pprint-dispatch*]
-    (cljs.pprint/with-pprint-dispatch
-      (fn [o]
-        (when (meta o)
-          (orig-dispatch (meta o)))
-        (orig-dispatch o))
-      (cljs.pprint/pprint obj))))
-
-#_(set! cljs.pprint/*print-pprint-dispatch* ppm)
-
+(def gql-build-schema (aget js/GraphQL "buildSchema"))
+(def typename-field :__typename)
 
 (defn create-field-node [name]
   {:kind "Field"
@@ -40,6 +28,13 @@
 (defn create-name-node [name]
   {:kind "Name"
    :value name})
+
+
+(defn build-schema [schema]
+  (cond-> schema
+    (string? schema) gql-build-schema
+    true (graphql-utils/add-keyword-type {:disable-serialize? true})
+    true (graphql-utils/add-date-type {:disable-serialize? true})))
 
 
 (defn- ancestors->query-path [ancestors & [{:keys [:use-aliases? :gql-name->kw]
@@ -103,9 +98,10 @@
     (graphql-type->id-field-names (query-path->graphql-type schema query-path))))
 
 
-(defn contains-typename? [node {:keys [:typename-field]}]
+(defn contains-typename? [node]
   (and (map? node)
        (get node typename-field)))
+
 
 (defn entity? [node id-field-names]
   (and (map? node)
@@ -113,7 +109,7 @@
        (every? #(not (nil? (get node %))) id-field-names)))
 
 
-(defn get-ref [node id-field-names {:keys [:typename-field]}]
+(defn get-ref [node id-field-names]
   {:id (if (= 1 (count id-field-names))
          (get node (first id-field-names))
          (select-keys node id-field-names))
@@ -133,19 +129,12 @@
   (get-in entities [type id]))
 
 
-(defn- merge-in-colls2 [existing-val new-val]
-  (if (and (sequential? existing-val)
-           (sequential? new-val))
-    (mapv (partial reduce cljs-utils/merge-in)
-          (partition 2 (interleave existing-val new-val)))
-    (cljs-utils/merge-in existing-val new-val)))
-
-
 (defn- ensure-count [map-seq c]
   (concat map-seq (repeat (max (- c (count map-seq)) 0)
                           (if-let [typename (:__typename (first map-seq))]
                             {:__typename typename}
                             {}))))
+
 
 (letfn [(merge-in-colls* [a b]
           (cond
@@ -186,7 +175,7 @@
                              (reduce
                                (fn [acc [key value]]
                                  (let [{:keys [:name :args]} (meta (get-in query (concat path [key])))]
-                                   (update-in acc (remove nil? [(or name key) args]) merge-in-colls2 value)))
+                                   (update-in acc (remove nil? [(or name key) args]) merge-in-colls value)))
                                {}
                                dectx-node))
                            dectx-node)
@@ -195,6 +184,7 @@
                      (catch :default _
                        node)))
                  (contextual/contextualize data)))
+
 
 (defn query-clj-replace-aliases [query-clj]
   (walk/postwalk
@@ -228,13 +218,13 @@
                                 id-field-names (:id-field-names (meta (get-in query path)))]
                             (cond
                               (entity? dectx-node id-field-names)
-                              (let [dectx-node (update dectx-node (:typename-field opts) (:gql-name->kw opts))
-                                    ref (get-ref dectx-node id-field-names opts)]
+                              (let [dectx-node (update dectx-node typename-field (:gql-name->kw opts))
+                                    ref (get-ref dectx-node id-field-names)]
                                 (swap! entities #(update-entity % ref dectx-node))
                                 ref)
 
-                              (contains-typename? dectx-node opts)
-                              (let [dectx-node (update dectx-node (:typename-field opts) (:gql-name->kw opts))]
+                              (contains-typename? dectx-node)
+                              (let [dectx-node (update dectx-node typename-field (:gql-name->kw opts))]
                                 dectx-node)
 
                               :else dectx-node))
@@ -249,11 +239,9 @@
 
 
 (defn normalize-response [data query-clj opts]
-  #_(ppm (:query query-clj))
-
   (-> data
     (response-replace-aliases query-clj)
-    (->> (walk/postwalk identity))
+    (->> (walk/postwalk identity))                          ;; ¯\_(ツ)_/¯ contextualize otherwise throws error, couldn't figure it out
     (replace-entities-with-refs (query-clj-replace-aliases query-clj) opts)))
 
 
@@ -386,7 +374,7 @@
     arg))
 
 
-(defn merge-queries [& query-configs]
+(defn batch-queries [& query-configs]
   (let [query-configs (map #(select-keys % [:query :variables])
                            (js->clj query-configs :keywordize-keys true))]
     (-> (rest query-configs)
@@ -422,14 +410,12 @@
       (js/DataLoader.
         (fn [query-configs]
           (let [query-configs (vec query-configs)
-                {:merged-query :query
-                 :merged-variables :variables} (apply merge-queries query-configs)
+                {:batched-query :query
+                 :batched-variables :variables} (apply batch-queries query-configs)
                 req-opts (merge opts
-                                {:query merged-query
-                                 :variables merged-variables
+                                {:query batched-query
+                                 :variables batched-variables
                                  :query-configs query-configs})]
-            (when on-request
-              (dispatch (vec (concat on-request [req-opts]))))
             (js-invoke @dt "clearAll")
             (let [res-promise
                   (js/Promise.
@@ -453,9 +439,11 @@
     {:query-str (print-str-graphql query)
      :query query}))
 
+
 (defn create-middleware [id middleware-fn]
   {:id id
    :fn middleware-fn})
+
 
 (defn apply-query-middlewares [middlewares {:keys [:query :variables] :as opts}]
   (let [results (doall
@@ -474,8 +462,7 @@
     results))
 
 
-(defn remove-unused-definitions [query]
-  (.log js/console query)
+(defn remove-unused-variable-defs [query]
   (let [used-variables (atom #{})]
 
     (visit query (clj->js {:Variable
@@ -508,6 +495,4 @@
                                                      (when (or (not (aget node "variable"))
                                                                (contains? @used-variables (aget node "variable" "name" "value")))
                                                        js/undefined))}}))]
-
       new-query)))
-

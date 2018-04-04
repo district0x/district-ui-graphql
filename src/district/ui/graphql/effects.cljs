@@ -2,7 +2,6 @@
   (:require
     [cljsjs.graphql]
     [clojure.string :as string]
-    [district.cljs-utils :as cljs-utils]
     [district.graphql-utils :as graphql-utils]
     [district.ui.graphql.utils :as utils]
     [re-frame.core :refer [reg-fx dispatch]]))
@@ -39,18 +38,19 @@
                                      (not (empty? (string/trim (:query-str req-opts)))))
                             (fetcher (clj->js {:query (:query-str req-opts) :variables variables})))]
 
-      (println "finalq: " (print-str-graphql query))
+      (when (and on-request fetcher-promise)
+        (dispatch (vec (concat on-request [req-opts]))))
 
       (.catch (.then (js/Promise.all (clj->js (concat responses [fetcher-promise])))
                      (fn [resps]
                        (let [res (reduce (fn [acc res]
                                            (let [res (-> (graphql-utils/js->clj-response res {:gql-name->kw gql-name->kw})
                                                        utils/remove-nil-vals)]
-                                             (utils/merge-in-colls acc (print.foo/look res))))
+                                             (utils/merge-in-colls acc res)))
                                          {}
                                          resps)]
                          (when on-response
-                           (dispatch (vec (concat on-response [(print.foo/look res) req-opts]))))
+                           (dispatch (vec (concat on-response [res req-opts]))))
                          (if (empty? (:errors res))
                            (when on-success
                              (dispatch (vec (concat on-success [(:data res) req-opts]))))

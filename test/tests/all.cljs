@@ -1,16 +1,11 @@
 (ns tests.all
   (:require
-    [cljs-time.coerce :as tc]
     [cljs-time.core :as t]
     [cljs.test :refer [deftest is testing run-tests async use-fixtures]]
-    [clojure.data]
     [day8.re-frame.test :refer [run-test-async run-test-sync wait-for]]
-    [district.cljs-utils :as cljs-utils]
     [district.graphql-utils :as graphql-utils]
-    [district.ui.graphql.effects :as effects]
     [district.ui.graphql.events :as events]
     [district.ui.graphql.middleware.resolver :refer [create-resolver-middleware]]
-    [district.ui.graphql.queries :as queries]
     [district.ui.graphql.subs :as subs]
     [district.ui.graphql]
     [mount.core :as mount]
@@ -21,32 +16,6 @@
 (def gql-sync (aget js/GraphQL "graphqlSync"))
 (def build-schema (aget js/GraphQL "buildSchema"))
 (def parse-graphql (aget js/GraphQL "parse"))
-
-
-#_(comment
-    (def schema "
-  scalar Date
-  scalar Keyword
-
-  type Query {
-    searchUsers(user_status: Keyword): [User]
-  }
-
-  type User {
-    user_address: String
-    user_status: Keyword
-    user_registeredOn: Date
-    user_active_: Boolean
-    user_favoriteNumbers: [Int]
-    user_params: [Parameter]
-  }
-
-  type Parameter {
-    param_db: String
-    param_key: Keyword
-  }
-")
-    )
 
 
 (def schema "
@@ -83,14 +52,17 @@
 ")
 
 (def response-root-value (atom nil))
-(defn set-response! [root-value]
-  (reset! response-root-value root-value))
+(def response-schema (atom schema))
+(defn set-response! [root-value & [schema]]
+  (reset! response-root-value root-value)
+  (when schema
+    (reset! response-schema schema)))
 
 (defn custom-fetch [_ req]
   (js/Promise.
     (fn [resolve]
       (let [{:strs [query variables]} (js->clj (js/JSON.parse (aget req "body")))
-            res (gql-sync (-> (build-schema schema)
+            res (gql-sync (-> (build-schema @response-schema)
                             (graphql-utils/add-keyword-type)
                             (graphql-utils/add-date-type))
                           query
@@ -151,23 +123,24 @@
                                                                    [:param/db :param/other-key]]]]]]]}])]
 
         (wait-for [::events/normalize-response]
-          (is (true? (:graphql/loading? @query1)))
-          (is (nil? (:graphql/errors @query1)))
-
           (wait-for [::events/set-query-loading]
-            (let [{:keys [:items :total-count]} (:search-users @query1)
-                  {:keys [:user/address :user/registered-on :user/status :user/favorite-numbers :user/params :user/active?]}
-                  (first items)]
-              (is (= 1 (:total-count (:search-users @query1))))
-              (is (= address "Street 1"))
-              (is (t/equal? registered-on (t/date-time 2018 05 05)))
-              (is (= status :user.status/active))
-              (is (= favorite-numbers [1 2 3]))
-              (is (= params [{:param/db "b", :param/other-key "kek"}]))
-              (is (true? active?))
+            (is (true? (:graphql/loading? @query1)))
+            (is (nil? (:graphql/errors @query1)))
+            (wait-for [::events/set-query-loading]
+              (is (not (:graphql/loading? @query1)))
+              (let [{:keys [:items :total-count]} (:search-users @query1)
+                    {:keys [:user/address :user/registered-on :user/status :user/favorite-numbers :user/params :user/active?]}
+                    (first items)]
+                (is (= 1 (:total-count (:search-users @query1))))
+                (is (= address "Street 1"))
+                (is (t/equal? registered-on (t/date-time 2018 05 05)))
+                (is (= status :user.status/active))
+                (is (= favorite-numbers [1 2 3]))
+                (is (= params [{:param/db "b", :param/other-key "kek"}]))
+                (is (true? active?))
 
-              (is (= "Street 1" (:user/address @(subscribe [::subs/entity :user 1]))))
-              (is (= "b" (:param/db @(subscribe [::subs/entity :parameter {:param/id 123 :param/db "b"}])))))))))))
+                (is (= "Street 1" (:user/address @(subscribe [::subs/entity :user 1]))))
+                (is (= "b" (:param/db @(subscribe [::subs/entity :parameter {:param/id 123 :param/db "b"}]))))))))))))
 
 
 (deftest query-batching
@@ -374,7 +347,13 @@
                                                      (js/Promise. (fn [resolve]
                                                                     (resolve [{:param/id 456
                                                                                :param/db "d"
-                                                                               :param/other-key "77"}]))))}])})}}
+                                                                               :param/other-key "77"
+                                                                               :param/creator
+                                                                               (fn []
+                                                                                 (js/Promise. (fn [resolve]
+                                                                                                (resolve
+                                                                                                  {:user/id 5
+                                                                                                   :user/address "Street ABC"}))))}]))))}])})}}
 
           middleware2 {:root-value
                        {:params (fn [{:keys [:db :keys]}]
@@ -412,7 +391,10 @@
                                                                [{:param/id 123
                                                                  :param/db "b"
                                                                  :param/key "key1"
-                                                                 :param/other-key other-key}])}])})
+                                                                 :param/other-key other-key
+                                                                 :param/creator (fn []
+                                                                                  {:user/id 5
+                                                                                   :user/address "Street XYZ"})}])}])})
                     :params (fn [{:keys [:db :keys]}]
                               (for [key keys]
                                 {:param/id key
@@ -434,7 +416,8 @@
                                                                 :user/active?
                                                                 :user/favorite-numbers
                                                                 [:user/params {:param/other-key :$c}
-                                                                 [:param/db :param/other-key]]]]]]]
+                                                                 [:param/db :param/other-key
+                                                                  [:param/creator [:user/address]]]]]]]]]
                                            :variables [{:variable/name :$c
                                                         :variable/type :String!}]}
                              {:variables {:c "kek"}}])
@@ -459,12 +442,6 @@
         (is (nil? (:graphql/errors @query1)))
         (is (nil? (:graphql/errors @query2)))
 
-        (print.foo/look @(subscribe [::subs/entities]))
-        (print.foo/look @(subscribe [::subs/graph]))
-
-        #_(print.foo/look @query1)
-        #_(print.foo/look @query2)
-
         (let [{:keys [:items :total-count]} (:search-users @query1)
               {:keys [:user/address :user/registered-on :user/status :user/favorite-numbers :user/params :user/active?]}
               (first items)]
@@ -473,7 +450,7 @@
           (is (t/equal? registered-on (t/date-time 2018 9 9)))
           (is (= status :user.status/active))
           (is (= favorite-numbers [9 8 7]))
-          (is (= params [{:param/db "d", :param/other-key "77"}]))
+          (is (= params [{:param/db "d", :param/other-key "77" :param/creator {:user/address "Street ABC"}}]))
 
           ;; tricky, because active? of second query should override "true", since user id is the same
           (is (false? active?))
@@ -491,3 +468,99 @@
           (is (= "a" (:param/db @(subscribe [::subs/entity :parameter {:param/id :key2 :param/db "a"}]))))
           (is (= "b" (:param/db @(subscribe [::subs/entity :parameter {:param/id :key3 :param/db "b"}]))))
           (is (= false (:user/active? @(subscribe [::subs/entity :user 2])))))))))
+
+(def readme-tutorial-schema "
+   scalar Date
+   scalar Keyword
+
+   type Query {
+     user(user_id: ID): User
+     searchItems(keyword: String, item_status: Keyword): [Item]
+   }
+
+   type User {
+     user_id: ID
+     user_address: String
+     user_registeredOn: Date
+     user_premiumMember_: Boolean
+     user_cartItems: [CartItem]
+   }
+
+   type CartItem {
+     cartItem_item: Item
+     cartItem_quantity: Int
+   }
+
+   type Item {
+     item_id: ID
+     item_title: String
+     item_description: String
+     item_status: Keyword
+     item_price: Float
+   }
+")
+
+(deftest readme-tutorial
+  (run-test-async
+    (-> (mount/with-args {:graphql (merge mount-args
+                                          {:schema readme-tutorial-schema})})
+      (mount/start))
+
+    (set-response! {:user (fn []
+                            {:user/id "abc"
+                             :user/address "Street 123"
+                             :user/status :user.status/active
+                             :user/registered-on (t/date-time 2018 10 10)
+                             :user/premium-member? true
+                             :user/cart-items (fn []
+                                                [{:cart-item/quantity 2
+                                                  :cart-item/item (fn []
+                                                                    {:item/id 1
+                                                                     :item/title "Some Item"
+                                                                     :item/description "Some Item Description"
+                                                                     :item/price 123.456})}])})
+                    :search-items (fn [{:keys [:item/status]}]
+                                    [{:item/id "xyz"
+                                      :item/title "Some Item"
+                                      :item/description "Some Item Description"
+                                      :item/status status
+                                      :item/price 123.456}])}
+                   readme-tutorial-schema)
+
+    (let [query1 (subscribe [::subs/query {:queries [[:user
+                                                      {:user/id "abc"}
+                                                      [:user/address
+                                                       :user/registered-on
+                                                       :user/premium-member?
+                                                       [:user/cart-items [:cart-item/quantity
+                                                                          [:cart-item/item [:item/title
+                                                                                            :item/price]]]]]]]}])
+
+          query2 (subscribe [::subs/query {:queries [[:search-items
+                                                      {:keyword "Grass" :item/status :item.status/active}
+                                                      [:item/title
+                                                       :item/description
+                                                       :item/status
+                                                       :item/price]]]}])]
+
+      (wait-for [::events/normalize-response ::events/query-error*]
+        (is (nil? (:graphql/errors @query1)))
+        (is (nil? (:graphql/errors @query2)))
+
+        (let [{:keys [:user/address :user/registered-on :user/premium-member? :user/cart-items]} (:user @query1)
+              {:keys [:item/title :item/description :item/status :item/price]}
+              (first (:search-items @query2))]
+          (is (= address "Street 123"))
+          (is (t/equal? registered-on (t/date-time 2018 10 10)))
+          (is (true? premium-member?))
+          (is (= (first cart-items) {:cart-item/quantity 2
+                                     :cart-item/item {:item/title "Some Item"
+                                                      :item/price 123.456}}))
+
+          (is (= title "Some Item"))
+          (is (= description "Some Item Description"))
+          (is (= status :item.status/active))
+          (is (= price 123.456))
+
+          (is (= "Street 123" (:user/address @(subscribe [::subs/entity :user "abc"]))))
+          (is (= "Some Item" (:item/title @(subscribe [::subs/entity :item "xyz"])))))))))

@@ -13,15 +13,13 @@
     [re-frame.core :refer [reg-event-fx trim-v]]))
 
 (def interceptors [trim-v])
-(def build-schema (aget js/GraphQL "buildSchema"))
-
 
 (reg-event-fx
   ::start
   interceptors
   (fn [{:keys [:db]} [{:keys [:schema :url :query-middlewares :fetch-opts] :as opts}]]
-
-    (let [fetcher (js/apolloFetch.createApolloFetch (clj->js (merge {:uri url} fetch-opts)))
+    (let [fetcher (when url
+                    (js/apolloFetch.createApolloFetch (clj->js (merge {:uri url} fetch-opts))))
           dataloader (utils/create-dataloader {:fetch-event [::fetch]
                                                :on-success [::normalize-response]
                                                :on-error [::query-error*]
@@ -31,18 +29,15 @@
       {:db (-> db
              (queries/merge-config
                (merge
-                 {:typename-field :__typename
-                  :kw->gql-name graphql-utils/kw->gql-name
+                 {:kw->gql-name graphql-utils/kw->gql-name
                   :gql-name->kw graphql-utils/gql-name->kw
                   :fetcher fetcher
                   :dataloader dataloader
-                  :schema (-> (build-schema schema)
-                            (graphql-utils/add-keyword-type {:disable-serialize? true})
-                            (graphql-utils/add-date-type {:disable-serialize? true}))
+                  :schema (utils/build-schema schema)
                   :query-middlewares (concat [(utils/create-middleware :id-fields id-fields-middleware)
                                               (utils/create-middleware :typenames typenames-middleware)]
                                              query-middlewares)}
-                 (select-keys opts [:typename-field :kw->gql-name :gql-name->kw]))))})))
+                 (select-keys opts [:kw->gql-name :gql-name->kw]))))})))
 
 
 (reg-event-fx
@@ -76,10 +71,10 @@
 
 
 (reg-event-fx
-  ::assoc-queries-with-merged-query
+  ::assoc-queries-with-batched-query
   interceptors
-  (fn [{:keys [:db]} [{:keys [:merged-query-str :query-configs]}]]
-    {:db (queries/assoc-queries-with-merged-query db query-configs merged-query-str)}))
+  (fn [{:keys [:db]} [{:keys [:batched-query-str :query-configs]}]]
+    {:db (queries/assoc-queries-with-batched-query db query-configs batched-query-str)}))
 
 
 (reg-event-fx
@@ -104,6 +99,20 @@
 
 
 (reg-event-fx
+  ::set-schema
+  interceptors
+  (fn [{:keys [:db]} [schema]]
+    {:db (queries/merge-config db {:schema (utils/build-schema schema)})}))
+
+
+(reg-event-fx
+  ::update-entity
+  interceptors
+  (fn [{:keys [:db]} [type id new-entity]]
+    {:db (queries/update-entity db type id new-entity)}))
+
+
+(reg-event-fx
   ::query-error*
   interceptors
   (fn [{:keys [:db]} [errors {:keys [:query-str]}]]
@@ -114,8 +123,8 @@
   ::query-request*
   interceptors
   (fn [{:keys [:db]} [{:keys [:query-str :query-configs]}]]
-    {:dispatch-n [[::assoc-queries-with-merged-query {:merged-query-str query-str
-                                                      :query-configs query-configs}]
+    {:dispatch-n [[::assoc-queries-with-batched-query {:batched-query-str query-str
+                                                       :query-configs query-configs}]
                   [::set-query-loading {:query-str query-str
                                         :loading? true}]]}))
 
@@ -123,7 +132,8 @@
   ::query-response*
   interceptors
   (fn [{:keys [:db]} [_ {:keys [:query-str]}]]
-    {:dispatch [::set-query-loading {:query-str query-str :loading? false}]}))
+    {:dispatch [::set-query-loading {:query-str query-str
+                                     :loading? false}]}))
 
 
 (reg-event-fx

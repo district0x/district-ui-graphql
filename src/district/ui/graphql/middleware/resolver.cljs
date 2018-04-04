@@ -1,8 +1,8 @@
 (ns district.ui.graphql.middleware.resolver
-  (:require [clojure.walk :as walk]
-            [district.graphql-utils :as graphql-utils]
-            [district.cljs-utils :as cljs-utils]
-            [district.ui.graphql.utils :as utils]))
+  (:require
+    [clojure.walk :as walk]
+    [district.graphql-utils :as graphql-utils]
+    [district.ui.graphql.utils :as utils]))
 
 (def visit (aget js/GraphQL "visit"))
 (def gql-sync (aget js/GraphQL "graphqlSync"))
@@ -76,7 +76,8 @@
   (utils/create-middleware
     id
     (fn [{:keys [:schema :query :variables :gql-name->kw]}]
-      (let [query-str (print-str-graphql query)
+      (let [context (merge context {:db re-frame.db/app-db})
+            query-str (print-str-graphql query)
             variables (clj->js variables)
             res (-> (gql-sync schema
                               query-str
@@ -112,7 +113,7 @@
                                                    js/undefined))
 
                                                js/undefined))})
-                        utils/remove-unused-definitions)]
+                        utils/remove-unused-variable-defs)]
 
         {:query new-query
          :response (gql schema
