@@ -70,7 +70,7 @@ and [gql-name->kw](https://github.com/district0x/district-graphql-utils#gql-name
 be changed in configuration.
 
 ### Module Start
-Next we start our graphql mount module. This should be done at app bootstrap, where you initialize re-frame. 
+Next we start our graphql [re-mount](https://github.com/district0x/d0x-INFRA/blob/master/re-mount.md) module. This should be done at app bootstrap, where you initialize re-frame. 
 
 ```clojure
 (ns my.app.core
