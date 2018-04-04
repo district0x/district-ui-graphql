@@ -19,7 +19,7 @@ Complete documentation is below for more in-depth understanding.
 
 Full code of example application can be found at [district-demo-graphql](https://github.com/district0x/district-demo-graphql).
 
-#### Schema
+### Schema
 First, we need to define GraphQL schema. It's good to have it in shared namespace between server and client, so you can easily 
 pass it to both. At the moment, we don't have library that would convert a cljs data scructure into GraphQL schema, 
 so we're going to define it as a string. In future we'll provide such library as well.  
@@ -69,7 +69,7 @@ we want to preserve keyword namespaces, we use [kw->gql-name](https://github.com
 and [gql-name->kw](https://github.com/district0x/district-graphql-utils#gql-name-kw) for conversion. These functions can
 be changed in configuration.
 
-#### Module Start
+### Module Start
 Next we start our graphql mount module. This should be done at app bootstrap, where you initialize re-frame. 
 
 ```clojure
@@ -84,7 +84,7 @@ Next we start our graphql mount module. This should be done at app bootstrap, wh
   (mount/start))
 ```
 
-#### Using Subscriptions
+### Using Subscriptions
 Now we're pretty much set up! Let's look how reagent components would look like.    
 Again, this pseudocode assumes you have server running and retuning valid GraphQL responses. 
 
@@ -160,7 +160,7 @@ fancy subscriptions handle it all for you! Let's go step-by-step what actually h
 There is good amount of underlying complexity associated with these steps, but luckily for you, you don't need to deal
 with any of that! But for better comprehension, let's look at some of them into more detail: 
 
-#### Normalisation
+### Normalisation
 When data is received from the server as graph, we need to normalise this data, because some data can be duplicated throughout
 the graph. For example, if I receive data about user with id `"1"` from query `:user-by-id`, I want it to be recognised
 as the same user even when completely different query (e.g `:search-users`) returns data for user with id `"1"`.
@@ -224,7 +224,7 @@ subscriptions: `::entities`, `::entity` and `::graph` or simply by inspecting re
 you should always use `::query` subscription to query data with client-side GraphQL, because type coercion happens 
 on that level.
 
-#### Refetching
+### Refetching
 Sometimes you might want to refetch data after some real-time event occurs, not only when component is mounted into DOM.
 For that purpose `::query` subscription offers `:refetch-on` option. You simply pass it set of events as you'd pass 
 them into [re-frame-forward-events-fx](https://github.com/Day8/re-frame-forward-events-fx) `:events` field. 
@@ -243,7 +243,7 @@ When one of those events occures, query will be refetched. When the component is
       )))
 ```
 
-#### Query Middleware
+### Query Middleware
 If you think this was cool so far, you ain't seen best part yet ;) We've been said GraphQL truly shines in loading data 
 from multiple resources, right? True, but usually this is kept only for server-side where GraphQL resolvers are run. 
 We already need to run GraphQL resolvers against re-frame db client-side, so why not to open Pandora's box 
@@ -336,7 +336,7 @@ don't even need to have GraphQL server! That's why `:url` in module configuratio
 Current limitation of query "shrinking" are fragments. Fragments are not being removed from query if they're not 
 necessary to send to the GraphQL server. We hope to resolve this in future.  
 
-#### Complex Queries
+### Complex Queries
 The guide above didn't show all kinds of complex GraphQL queries including fragments, variables, aliases etc. 
 These are all supported by this module, to see how they're used in action please inspect [tests](https://github.com/district0x/district-ui-graphql/blob/master/test/tests/all.cljs) and 
 [graphql-query](https://github.com/district0x/graphql-query).
