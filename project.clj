@@ -1,4 +1,4 @@
-(defproject district0x/district-ui-graphql "1.0.0"
+(defproject district0x/district-ui-graphql "1.0.1"
   :description "district UI module for GraphQL integration"
   :url "https://github.com/district0x/district-ui-graphql"
   :license {:name "Eclipse Public License"
