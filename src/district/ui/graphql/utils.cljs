@@ -332,7 +332,7 @@
       spread-query-fragments)))
 
 
-(defn create-field-resolver [& [{:keys [gql-name->kw]
+(defn create-field-resolver [& [{:keys [:gql-name->kw]
                                  :or {gql-name->kw identity}}]]
   (fn [{:keys [:graph :entities]} args _ info]
     (let [name (aget info "fieldName")
