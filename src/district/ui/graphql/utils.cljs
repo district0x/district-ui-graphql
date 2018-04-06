@@ -333,7 +333,7 @@
 
 
 (defn create-field-resolver [& [{:keys [:gql-name->kw]
-                                 :or {:gql-name->kw identity}}]]
+                                 :or {gql-name->kw identity}}]]
   (fn [{:keys [:graph :entities]} args _ info]
     (let [name (aget info "fieldName")
           args (serialize-args args {:gql-name->kw gql-name->kw})
@@ -410,8 +410,8 @@
       (js/DataLoader.
         (fn [query-configs]
           (let [query-configs (vec query-configs)
-                {:batched-query :query
-                 :batched-variables :variables} (apply batch-queries query-configs)
+                {batched-query :query
+                 batched-variables :variables} (apply batch-queries query-configs)
                 req-opts (merge opts
                                 {:query batched-query
                                  :variables batched-variables
