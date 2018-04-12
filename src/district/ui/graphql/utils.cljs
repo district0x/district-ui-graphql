@@ -10,7 +10,6 @@
     [district.cljs-utils :as cljs-utils]
     [district.graphql-utils :as graphql-utils]
     [graphql-query.core :refer [graphql-query]]
-    [print.foo :include-macros true]
     [re-frame.core :refer [dispatch dispatch-sync]]))
 
 (def parse-graphql (aget js/GraphQL "parse"))
