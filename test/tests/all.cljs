@@ -470,7 +470,7 @@
           (is (= false (:user/active? @(subscribe [::subs/entity :user 2])))))))))
 
 
-(deftest ignored-params
+(deftest subscription-id
   (run-test-async
     (-> (mount/with-args {:graphql mount-args})
       (mount/start))
