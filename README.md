@@ -7,7 +7,7 @@ that provides client-side solution for [GraphQL](https://graphql.org/) and re-fr
 Think of [apollo-client](https://github.com/apollographql/apollo-client), but tailored specifically for re-frame.
  
 ## Installation
-Add `[district0x/district-ui-graphql "1.0.2"]` into your project.clj  
+Add `[district0x/district-ui-graphql "1.0.3"]` into your project.clj  
 Include `[district.ui.graphql]` in your CLJS file, where you use `mount/start`
   
 ## Introduction
@@ -336,6 +336,36 @@ don't even need to have GraphQL server! That's why `:url` in module configuratio
 Current limitation of query "shrinking" are fragments. Fragments are not being removed from query if they're not 
 necessary to send to the GraphQL server. We hope to resolve this in future.  
 
+
+### Infinite Scroll
+To be able to implement feature such as infinite scroll, query subscription accepts one extra parameter `:id`. 
+When `:id` is passed, subscription can be extended "on the fly" to return results from new queries. So in 
+case of infinite scroll, you want single subscription returning all loaded results, but you want to keep adding results
+into this subscription as user scrolls down. 
+
+So for example you might have subscription like following: 
+```clojure
+(subscribe [::subs/query {:queries [[:search-users
+                                       {:limit 10 :offset 0}
+                                       [:total-count
+                                        [:items [:user/address]]]]]}
+              {:id :my-query}])
+              
+```
+Then somewhere else in your code, you'll have callback for scrolling event, where you'll load another query into the 
+`:my-query` subscription like this:
+ 
+```clojure
+(dispatch [::events/query {:query {:queries [[:search-users
+                                                {:limit 10 :offset 10}
+                                                [:total-count
+                                                 [:items [:user/address]]]]]}
+                             :id :my-query}])
+```
+
+Then the subscription will return collection of all query results. 
+
+
 ### Complex Queries
 The guide above didn't show all kinds of complex GraphQL queries including fragments, variables, aliases etc. 
 These are all supported by this module, to see how they're used in action please inspect [tests](https://github.com/district0x/district-ui-graphql/blob/master/test/tests/all.cljs) and 
@@ -413,7 +443,8 @@ query-opts:
 * `:refetch-on`: Set of events as passed to [re-frame-forward-events-fx](https://github.com/Day8/re-frame-forward-events-fx),
 that trigger refetching of the query.
 * `:refetch-id`: ID of refetch listener, so later it can be stopped. If not provided, it'll be calculated automatically for you. 
-* `:disable-fetch?`: Pass true if you want to disable remote fetching of this query, and just query re-frame db client-side. 
+* `:disable-fetch?`: Pass true if you want to disable remote fetching of this query, and just query re-frame db client-side.
+* `:id`: ID of subscription. See Infinite Scroll section.  
 
 #### <a name="entities-sub">`::entities [& type]`
 Returns all recognised entities extracted from graph responses. Pass type if you want to get entities only for 

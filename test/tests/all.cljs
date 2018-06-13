@@ -469,6 +469,50 @@
           (is (= "b" (:param/db @(subscribe [::subs/entity :parameter {:param/id :key3 :param/db "b"}]))))
           (is (= false (:user/active? @(subscribe [::subs/entity :user 2])))))))))
 
+
+(deftest ignored-params
+  (run-test-async
+    (-> (mount/with-args {:graphql mount-args})
+      (mount/start))
+
+    (set-response! {:search-users (fn []
+                                    {:total-count 1
+                                     :items (constantly
+                                              [{:user/address "Street 1"}])})})
+
+    (let [query1 (subscribe [::subs/query
+                             {:queries [[:search-users
+                                         {:some/param "a" :user/registered-after (t/date-time 2018 10 10)}
+                                         [:total-count
+                                          [:items [:user/address]]]]]}
+                             {:id :my-query}])]
+
+      (wait-for [::events/normalize-response]
+        (is (nil? (:graphql/errors @query1)))
+
+        (is (= {:total-count 1 :items [{:user/address "Street 1"}]}
+               (:search-users (first @query1))))
+
+        (set-response! {:search-users (fn []
+                                        {:total-count 2
+                                         :items (constantly
+                                                  [{:user/address "Street 2"}])})})
+
+        (dispatch [::events/query {:query {:queries [[:search-users
+                                                      {:some/param "b" :user/registered-after (t/date-time 2018 10 10)}
+                                                      [:total-count
+                                                       [:items [:user/address]]]]]}
+                                   :id :my-query}])
+
+        (wait-for [::events/normalize-response]
+          (is (= {:total-count 1 :items [{:user/address "Street 1"}]}
+                 (:search-users (first @query1))))
+
+          (is (= {:total-count 2 :items [{:user/address "Street 2"}]}
+                 (:search-users (second @query1)))))))))
+
+
+
 (def readme-tutorial-schema "
    scalar Date
    scalar Keyword

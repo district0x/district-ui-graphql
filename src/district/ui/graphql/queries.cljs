@@ -97,4 +97,12 @@
 
 
 (defn update-entity [db type id new-entity]
-  (update db [db-key :results :entities type (entity-id id)] cljs-utils/merge-in new-entity))
+  (update-in db [db-key :results :entities type (entity-id id)] cljs-utils/merge-in new-entity))
+
+
+(defn add-id-query [db id query-str variables]
+  (update-in db [db-key :id-queries id] (comp vec conj) {:query-str query-str :variables variables}))
+
+
+(defn id-queries [db id]
+  (get-in db [db-key :id-queries id]))

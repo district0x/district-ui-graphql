@@ -43,8 +43,8 @@
 (reg-event-fx
   ::query
   interceptors
-  (fn [{:keys [:db]} [{:keys [:query :query-str :variables :refetch-on :refetch-id] :as opts}]]
-    (let [{:keys [:query :query-str]} (if-not (or query query-str)
+  (fn [{:keys [:db]} [{:keys [:query :query-str :variables :refetch-on :refetch-id :id] :as opts}]]
+    (let [{:keys [:query :query-str]} (if-not query-str
                                         (utils/parse-query query {:kw->gql-name (queries/config db :kw->gql-name)})
                                         opts)]
 
@@ -56,6 +56,8 @@
           :query query
           :query-str query-str
           :variables variables}}
+        (when id
+          {:db (queries/add-id-query db id query-str variables)})
         (when (and refetch-on refetch-id)
           {:forward-events {:register (str queries/db-key refetch-id)
                             :events refetch-on

@@ -14,7 +14,7 @@
 
 (reg-sub-raw
   ::query
-  (fn [db [_ query {:keys [:variables :refetch-on :refetch-id :disable-fetch?]}]]
+  (fn [db [_ query {:keys [:variables :refetch-on :refetch-id :disable-fetch? :id]}]]
     (let [{:keys [:query :query-str]}
           (utils/parse-query query {:kw->gql-name (queries/config @db :kw->gql-name)})
 
@@ -24,10 +24,16 @@
                                         :query-str query-str
                                         :variables variables
                                         :refetch-on refetch-on
-                                        :refetch-id refetch-id}]))
+                                        :refetch-id refetch-id
+                                        :id id}]))
       (make-reaction
         (fn []
-          (queries/query @db query-str variables))
+          (if-not id
+            (queries/query @db query-str variables)
+            (doall
+              (map (fn [{:keys [:query-str :variables]}]
+                     (queries/query @db query-str variables))
+                   (queries/id-queries @db id)))))
         :on-dispose (fn []
                       (when refetch-id
                         (dispatch [::events/unregister-refetch {:refetch-id refetch-id}])))))))
