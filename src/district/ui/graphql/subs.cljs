@@ -3,6 +3,7 @@
     [district.ui.graphql.events :as events]
     [district.ui.graphql.queries :as queries]
     [district.ui.graphql.utils :as utils]
+    [cljs-time.extend]
     [graphql-query.core :refer [graphql-query]]
     [re-frame.core :refer [reg-sub reg-sub-raw dispatch-sync dispatch]]
     [reagent.ratom :refer [make-reaction]]))
