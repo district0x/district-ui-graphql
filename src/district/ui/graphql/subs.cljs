@@ -36,6 +36,8 @@
                      (queries/query @db query-str variables))
                    (queries/id-queries @db id)))))
         :on-dispose (fn []
+                      (when id
+                        (swap! db queries/remove-id-queries id))
                       (when refetch-id
                         (dispatch [::events/unregister-refetch {:refetch-id refetch-id}])))))))
 
