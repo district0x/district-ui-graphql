@@ -16,7 +16,7 @@
 
       (and (instance? (aget js/GraphQL "GraphQLList") return-type)
            (instance? (aget js/GraphQL "GraphQLObjectType") (aget return-type "ofType")))
-      (js/Array. (js/Object.))
+      (js/Array.)
 
       :else nil)))
 
