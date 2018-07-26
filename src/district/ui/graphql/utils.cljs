@@ -154,6 +154,32 @@
     [& args]
     (reduce merge-in-colls* nil args)))
 
+(defn non-empty-keys
+  "Given a map return the set of empty keys.
+  All this are considered empty keys
+  {:a nil
+   :b []
+   :c [nil nil nil]}"
+  [m]
+  (set (keep (fn [[k v]]
+               (when-not (or (nil? v)
+                             (and (sequential? v)
+                                  (empty? (remove nil? v))))
+                 k))
+             m)))
+
+
+(defn remove-empty-typename-paths
+  "All path in maps that are only for supporting other maps with :__typename as only key are removed."
+  [t]
+  (walk/postwalk
+   (fn [x]
+     (when-not (or (and (map? x) (= (non-empty-keys x) #{:__typename})))
+       ;; this hack is to avoid map-entry since map-entry? doesn't seems to work inside walk
+       (if (and (sequential? x) (not= (count x) 2))  
+         (into (empty x) (remove nil? x))
+         x)))
+   t))
 
 (defn remove-nil-vals [form]
   (walk/postwalk (fn [x]

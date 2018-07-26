@@ -637,9 +637,7 @@
         (is (nil? (:graphql/errors @query1)))
         
         (let [user (:user @query1)]
-          (is (= user {:user/id "abc"
-                       :user/address "Street 123"
-                       :user/status :user.status/active
+          (is (= user {:user/address "Street 123"
                        :user/registered-on (t/date-time 2018 10 10)
                        :user/premium-member? true
                        :user/cart-items []})))))))

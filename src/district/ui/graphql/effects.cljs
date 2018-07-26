@@ -43,12 +43,13 @@
 
       (.catch (.then (js/Promise.all (clj->js (concat responses [fetcher-promise])))
                      (fn [resps]
-                       (let [res (reduce (fn [acc res]
-                                           (let [res (-> (graphql-utils/js->clj-response res {:gql-name->kw gql-name->kw})
-                                                       utils/remove-nil-vals)]
-                                             (utils/merge-in-colls acc res)))
-                                         {}
-                                         resps)]
+                       (let [res (-> (reduce (fn [acc res]
+                                               (let [res (-> (graphql-utils/js->clj-response res {:gql-name->kw gql-name->kw})
+                                                             utils/remove-nil-vals)]
+                                                 (utils/merge-in-colls acc res)))
+                                             {}
+                                             resps)
+                                     (utils/remove-empty-typename-paths))] 
                          (when on-response
                            (dispatch (vec (concat on-response [res req-opts]))))
                          (if (empty? (:errors res))
