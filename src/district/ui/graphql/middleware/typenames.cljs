@@ -16,9 +16,11 @@
 
       (and (instance? (aget js/GraphQL "GraphQLList") return-type)
            (instance? (aget js/GraphQL "GraphQLObjectType") (aget return-type "ofType")))
-      (js/Array.)
-
-      :else nil)))
+      ;; TODO QUESTION How do I know here if I'll be resolving to empty or not
+      ;; since we don't know what resolver will apply
+      (js/Array. (js/Object.)) 
+      
+      :else nil))) 
 
 
 (defn typenames-middleware [{:keys [:query :schema :variables :kw->gql-name]}]
@@ -44,3 +46,5 @@
                              (clj->js variables)
                              nil
                              field-resolver))}))
+
+

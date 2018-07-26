@@ -608,3 +608,38 @@
 
           (is (= "Street 123" (:user/address @(subscribe [::subs/entity :user "abc"]))))
           (is (= "Some Item" (:item/title @(subscribe [::subs/entity :item "xyz"])))))))))
+
+(deftest readme-tutorial-empty-items
+  (run-test-async
+    (-> (mount/with-args {:graphql (merge mount-args
+                                          {:schema readme-tutorial-schema})})
+      (mount/start))
+
+    (set-response! {:user (fn []
+                            {:user/id "abc"
+                             :user/address "Street 123"
+                             :user/status :user.status/active
+                             :user/registered-on (t/date-time 2018 10 10)
+                             :user/premium-member? true
+                             :user/cart-items []})}
+                   readme-tutorial-schema)
+
+    (let [query1 (subscribe [::subs/query {:queries [[:user
+                                                      {:user/id "abc"}
+                                                      [:user/address
+                                                       :user/registered-on
+                                                       :user/premium-member?
+                                                       [:user/cart-items [:cart-item/quantity
+                                                                          [:cart-item/item [:item/title
+                                                                                            :item/price]]]]]]]}])]
+
+      (wait-for [::events/normalize-response ::events/query-error*]
+        (is (nil? (:graphql/errors @query1)))
+        
+        (let [user (:user @query1)]
+          (is (= user {:user/id "abc"
+                       :user/address "Street 123"
+                       :user/status :user.status/active
+                       :user/registered-on (t/date-time 2018 10 10)
+                       :user/premium-member? true
+                       :user/cart-items []})))))))
