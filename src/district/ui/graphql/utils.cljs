@@ -1,16 +1,17 @@
 (ns district.ui.graphql.utils
   (:require
-    [camel-snake-kebab.extras :refer [transform-keys]]
-    [cljs-time.coerce :as tc]
-    [cljs-time.core :as t]
-    [cljsjs.dataloader]
-    [clojure.set :as set]
-    [clojure.walk :as walk]
-    [contextual.core :as contextual]
-    [district.cljs-utils :as cljs-utils]
-    [district.graphql-utils :as graphql-utils]
-    [graphql-query.core :refer [graphql-query]]
-    [re-frame.core :refer [dispatch dispatch-sync]]))
+   [bignumber.core :as bn]
+   [camel-snake-kebab.extras :refer [transform-keys]]
+   [cljs-time.coerce :as tc]
+   [cljs-time.core :as t]
+   [cljsjs.dataloader]
+   [clojure.set :as set]
+   [clojure.walk :as walk]
+   [contextual.core :as contextual]
+   [district.cljs-utils :as cljs-utils]
+   [district.graphql-utils :as graphql-utils]
+   [graphql-query.core :refer [graphql-query]]
+   [re-frame.core :refer [dispatch dispatch-sync]]))
 
 (def parse-graphql (aget js/GraphQL "parse"))
 (def print-str-graphql (aget js/GraphQL "print"))
@@ -33,7 +34,8 @@
   (cond-> schema
     (string? schema) gql-build-schema
     true (graphql-utils/add-keyword-type {:disable-serialize? true})
-    true (graphql-utils/add-date-type {:disable-serialize? true})))
+    true (graphql-utils/add-date-type {:disable-serialize? true})
+    true (graphql-utils/add-bignumber-type)))
 
 
 (defn- ancestors->query-path [ancestors & [{:keys [:use-aliases? :gql-name->kw]
@@ -285,6 +287,9 @@
 
     (t/date? v)
     (tc/to-long v)
+
+    (bn/bignumber? v)
+    (.toString v)
 
     :else v))
 
