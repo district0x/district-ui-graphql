@@ -4,14 +4,15 @@
   :license {:name "Eclipse Public License"
             :url "http://www.eclipse.org/legal/epl-v10.html"}
 
-  :dependencies [[camel-snake-kebab "0.4.0"]
+  :dependencies [[district0x/bignumber "1.0.3"]
+                 [camel-snake-kebab "0.4.0"]
                  [cljsjs/apollo-fetch "0.7.0-0"]
                  [cljsjs/dataloader "1.4.0-0"]
                  [cljsjs/graphql "0.13.1-0"]
                  [com.andrewmcveigh/cljs-time "0.5.2"]
                  [day8.re-frame/forward-events-fx "0.0.5"]
                  [district0x/district-cljs-utils "1.0.3"]
-                 [district0x/district-graphql-utils "1.0.5"]
+                 [district0x/district-graphql-utils "1.0.6"]
                  [district0x/graphql-query "1.0.4"]
                  [madvas/contextual "0.1.0"]
                  [mount "0.1.11"]
