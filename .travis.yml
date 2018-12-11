@@ -2,8 +2,25 @@ sudo: required
 dist: trusty
 language: clojure
 script: lein doo chrome "tests" once
+notifications:
+  email: false
+  slack:
+    on_success: always
+    on_failure: always
+    rooms:
+    - district0x:53vhalUfg0MitsQwzjP5PWdd#travis-ci
 addons:
   chrome: stable
 before_script:
-  - export DISPLAY=:99.0
-  - sh -e /etc/init.d/xvfb start
+- export DISPLAY=:99.0
+- sh -e /etc/init.d/xvfb start
+env:
+  global:
+  - secure: gGQK6+2W3KYHB7/5u4x0QcJ8scW7VJYLqMZM0XuRgkUHc21BDCJQWVLYRq5jLaQFBcwdvRcHR+e7fwGMT8TUyNMZmTXAdQOtbaZgboKPuqem85SIhSjcPi3+E4lmGwKpHevpRgZ9wDCOP8ZllS8+t/9+jpJgkfRnsDZ7lU0Wfz/Om/j3n/jcmvU6N/quFtzB7m4HvgdtERAW9vMltBdGb1rl+7C5c+ucDtcNq0hdmKbsBD7x1aX5LJ4fO1CrsAUhEJBVlqtWoUlFAg8DXJupD6hBTBycQ6c2ergChixKssbT1D5xOafG1CSypNiPjGDkMgV0QpyNoA3dDyMUxdKFDFt86H/Sqze/X0irvyKu/TF3f0Z3j0TeZr7swP2VCe2u1wXX4kK3/Q/G4f8v8Hlf1djqIV7aXoRsUUQdSzgUwQPRKqz4gHX+IcxuRQnhib561LPHDV2mU1JFp8TJk+w71exDTvxTcJZYmp1E7pvu4XAvpktcKCbZRc532kxFfKh6cuYlt633Jk8IEfObpt6daRmYpGlTkmWtTqC0Ou9EEO0hGZ2ZhuZzulzXA/7jzOwLeP4hbS81+725PJ03gEhrglQnAtBJNzR6PuFJ7bCECGgsmrbagYWphGE/iAcBVkae/EtMydMPWoWrwkVvT+QPalnzn80GCugWbO6o+r5d+r4=
+  - secure: ivJB0wz/Uk051DFNBvquKyw5CZ/VzSLZdc41beBpxvKVACc8xNYcy8XvJ7OKLDdch6zj65Y5XDYy18cTrLpfbylOZYn7Yf8imtVynnzxZcytnBb1tTWJ+YJ8x8m1YJR6Gjr/vTzP7Ah+Bs2RMMYrXiz3c6VSgNTSO0YQt1NKcvkpDC91+JS9LvExT9IX7SqbuYg1CvI2a1mqoHxSYYQqaZobjLu2t4Tg99A7bpWfDSFzWELJvYKCuydtIZKB2hKckh8QA0fdpBvq9i+8AZBXuyxF3ME6loGsBcazpugy4k2WLgoT/VMaGuBuaNzNYn2I8TelemMwtHSF0q/wYwAewsQn7HBeBQOYh4r/RhKa2k98wcgoHs/kFuQ13jc9NfWylGClMS/OM+ERtke1TwNhw+dEixBLWb/l29uHbfr1Qp4gf0Bgi+zcUiaMME74kCMrZm8QhIO8TOTZBICRmBchB5RS/e8idpp6oB2tZR3CYD+VwSDlgzb4auLLI8XiIyKEbMBB1KSKaJ+7zvG9H9j6JBRWHI2YXjXYZPoksgV7XbSFFl3n5s4Kn8VYGT1jgKDNQMYKVPL0L2seN+qAyktA410B190RetvMCDfFsXrl0AzjW7yTYpWKVZA48B3cL5mi6q2wl/mydpUhJqTO+mQ8Fu4imTnMCdR2d2tyCBZGR2o=
+deploy:
+- provider: script
+  skip_cleanup: true
+  script: lein release :patch
+  on:
+    branch: master

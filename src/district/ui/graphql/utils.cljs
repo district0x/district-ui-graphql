@@ -94,7 +94,7 @@
     set))
 
 
-(defn- get-id-fields-names [schema ancestors]
+(defn get-id-fields-names [schema ancestors]
   (when-let [query-path (ancestors->query-path ancestors)]
     (graphql-type->id-field-names (query-path->graphql-type schema query-path))))
 
@@ -178,7 +178,7 @@
    (fn [x]
      (when-not (or (and (map? x) (= (non-empty-keys x) #{:__typename})))
        ;; this hack is to avoid map-entry since map-entry? doesn't seems to work inside walk
-       (if (and (sequential? x) (not= (count x) 2))  
+       (if (and (sequential? x) (not= (count x) 2))
          (into (empty x) (remove nil? x))
          x)))
    t))
