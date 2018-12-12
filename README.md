@@ -7,7 +7,10 @@ that provides client-side solution for [GraphQL](https://graphql.org/) and re-fr
 Think of [apollo-client](https://github.com/apollographql/apollo-client), but tailored specifically for re-frame.
  
 ## Installation
-Add `[district0x/district-ui-graphql "1.0.6"]` into your project.clj  
+
+district-ui-graphql is available as a Maven artifact from Clojars. The latest released version is:
+[![Clojars Project](https://img.shields.io/clojars/v/district0x/district-ui-graphql.svg)](https://clojars.org/district0x/district-ui-graphql)<br>
+
 Include `[district.ui.graphql]` in your CLJS file, where you use `mount/start`
   
 ## Introduction
