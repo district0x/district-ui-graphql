@@ -21,6 +21,8 @@
 
   :doo {:paths {:karma "./node_modules/karma/bin/karma"}}
 
+  :clean-targets ^{:protect false} ["target" "tests-output"]
+
   :npm {:devDependencies [[karma "1.7.1"]
                           [karma-chrome-launcher "2.2.0"]
                           [karma-cli "1.0.1"]
@@ -35,7 +37,7 @@
                              [lein-doo "0.1.9"]
                              [lein-npm "0.6.2"]]}}
 
- :deploy-repositories [["snapshots" {:url "https://clojars.org/repo"
+  :deploy-repositories [["snapshots" {:url "https://clojars.org/repo"
                                       :username :env/clojars_username
                                       :password :env/clojars_password
                                       :sign-releases false}]
@@ -44,7 +46,7 @@
                                       :password :env/clojars_password
                                       :sign-releases false}]]
 
-  :release-tasks [["vcs" "assert-committed"]
+  :release-tasks [#_["vcs" "assert-committed"]
                   ["change" "version" "leiningen.release/bump-version" "release"]
                   ["deploy"]]
 
