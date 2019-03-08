@@ -39,9 +39,19 @@
   (query-info db (query->batched-query db query variables)))
 
 
-(defn assoc-queries-with-batched-query [db query-configs batched-query-str]
+(defn assoc-query-preprocessing [db query-str preprocessing?]
+  (assoc-in db [db-key :query-info query-str :preprocessing?] preprocessing?))
+
+
+(defn query-preprocessing? [db query-str]
+  (:preprocessing? (query-info db query-str)))
+
+
+(defn assoc-queries-with-batched-query [db query-configs batched-query-str & [{:keys [:finish-query-preprocessing?]}]]
   (reduce (fn [db {:keys [:query-str :variables]}]
-            (assoc-in db [db-key :query->batched-query query-str variables] batched-query-str))
+            (cond-> db
+              true (assoc-in [db-key :query->batched-query query-str variables] batched-query-str)
+              finish-query-preprocessing? (assoc-query-preprocessing query-str false)))
           db
           query-configs))
 
@@ -54,7 +64,8 @@
   (assoc-in db [db-key :query-info query-str :errors] errors))
 
 
-(defn query [db query-str variables]
+(defn query [db query-str variables & [{:keys [:consider-preprocessing-as-loading?]
+                                        :or {consider-preprocessing-as-loading? true}}]]
   (let [gql-name->kw (config db :gql-name->kw)
         {:keys [:data :errors]}
         (-> (gql-sync (config db :schema)
@@ -71,8 +82,11 @@
              {:graphql/errors (map #(aget % "message") (vec errors))})
            (when-let [errors (:errors query-info)]
              {:graphql/errors errors})
-           (when-let [loading? (:loading? query-info)]
-             {:graphql/loading? loading?}))))
+           (let [preprocessing? (query-preprocessing? db query-str)]
+             {:graphql/preprocessing? preprocessing?
+              :graphql/loading? (or (:loading? query-info)
+                                    (and consider-preprocessing-as-loading?
+                                         preprocessing?))}))))
 
 
 (defn entities

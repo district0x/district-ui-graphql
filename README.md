@@ -409,12 +409,14 @@ These are all supported by this module, to see how they're used in action please
   - [query-info](#query-info)
   - [query->batched-query-info](#query-batched-query-info)
   - [assoc-query-loading](#assoc-query-loading)
+  - [assoc-query-preprocessing](#assoc-query-preprocessing)
   - [assoc-query-errors](#assoc-query-errors)
   - [query](#query)
   - [entities](#entities)
   - [entity](#entity)
   - [graph](#graph)
   - [update-entity](#update-entity)
+  - [query-preprocessing?](#query-preprocessing)
 - [district.ui.graphql.utils](#districtuigraphqlutils)
 - [district.ui.graphql.middleware.id-fields](#districtuigraphqlmiddlewareid-fields)
 - [district.ui.graphql.middleware.typenames](#districtuigraphqlmiddlewaretypenames)
@@ -447,7 +449,8 @@ query-opts:
 that trigger refetching of the query.
 * `:refetch-id`: ID of refetch listener, so later it can be stopped. If not provided, it'll be calculated automatically for you. 
 * `:disable-fetch?`: Pass true if you want to disable remote fetching of this query, and just query re-frame db client-side.
-* `:id`: ID of subscription. See Infinite Scroll section.  
+* `:id`: ID of subscription. See Infinite Scroll section.
+* `:consider-preprocessing-as-loading?`: Will be returning `:graphql/loading? true` also for preprocessing phase of query. Default: true  
 
 #### <a name="entities-sub">`::entities [& type]`
 Returns all recognised entities extracted from graph responses. Pass type if you want to get entities only for 
@@ -543,6 +546,9 @@ Return loading and errors state of batched query given query and variables
 #### <a name="assoc-query-loading">`assoc-query-loading [db query-str loading?]`
 Associates loading state with given query
 
+#### <a name="assoc-query-preprocessing">`assoc-query-preprocessing [db query-str preprocessing?]`
+Associates preprocessing state with given query
+
 #### <a name="assoc-query-errors">`assoc-query-errors [db query-str errors]`
 Associates errors with given query
 
@@ -557,6 +563,9 @@ Works same way as subscription `::graph`
 
 #### <a name="update-entity">`update-entity [db type id new-entity]`
 Updates entity in re-frame db. Works same was as event `::update-entity`. 
+
+#### <a name="query-preprocessing">`query-preprocessing? [db query-str]`
+Returns true if query is being preprocessed.  
 
 ## district.ui.graphql.utils
 In this namespace is bunch of utility functions for internal purposes of this module. 

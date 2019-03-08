@@ -15,7 +15,8 @@
 
 (reg-sub-raw
   ::query
-  (fn [db [_ query {:keys [:variables :refetch-on :refetch-id :disable-fetch? :id]}]]
+  (fn [db [_ query {:keys [:variables :refetch-on :refetch-id :disable-fetch? :id :consider-preprocessing-as-loading?]
+                    :or {consider-preprocessing-as-loading? true}}]]
     (let [{:keys [:query :query-str]}
           (utils/parse-query query {:kw->gql-name (queries/config @db :kw->gql-name)})
 
@@ -30,10 +31,11 @@
       (make-reaction
         (fn []
           (if-not id
-            (queries/query @db query-str variables)
+            (queries/query @db query-str variables {:consider-preprocessing-as-loading? consider-preprocessing-as-loading?})
             (doall
               (map (fn [{:keys [:query-str :variables]}]
-                     (queries/query @db query-str variables))
+                     (queries/query @db query-str variables
+                                    {:consider-preprocessing-as-loading? consider-preprocessing-as-loading?}))
                    (queries/id-queries @db id)))))
         :on-dispose (fn []
                       (when id

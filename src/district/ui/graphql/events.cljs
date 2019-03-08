@@ -56,8 +56,10 @@
           :query query
           :query-str query-str
           :variables variables}}
-        (when id
-          {:db (queries/add-id-query db id query-str variables)})
+        {:db (cond-> db
+               true (queries/assoc-query-preprocessing query-str true)
+               id (queries/add-id-query id query-str variables))}
+
         (when (and refetch-on refetch-id)
           {:forward-events {:register (str queries/db-key refetch-id)
                             :events refetch-on
@@ -76,7 +78,7 @@
   ::assoc-queries-with-batched-query
   interceptors
   (fn [{:keys [:db]} [{:keys [:batched-query-str :query-configs]}]]
-    {:db (queries/assoc-queries-with-batched-query db query-configs batched-query-str)}))
+    {:db (queries/assoc-queries-with-batched-query db query-configs batched-query-str {:finish-query-preprocessing? true})}))
 
 
 (reg-event-fx

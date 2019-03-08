@@ -129,9 +129,12 @@
                                                                   [:user/params {:param/other-key "kek"}
                                                                    [:param/db :param/other-key]]]]]]]}])]
 
+        (is (true? (:graphql/loading? @query1)))
+        (is (true? (:graphql/preprocessing? @query1)))
         (wait-for [::events/normalize-response]
           (wait-for [::events/set-query-loading]
             (is (true? (:graphql/loading? @query1)))
+            (is (false? (:graphql/preprocessing? @query1)))
             (is (nil? (:graphql/errors @query1)))
             (wait-for [::events/set-query-loading]
               (is (not (:graphql/loading? @query1)))
@@ -173,13 +176,18 @@
                                                        [:param/creator [:user/active?]]]]
                                          :query/alias :my-params}
                                         [:params {:db "b" :keys [:key3]}
-                                         [:param/db :param/other-key]]]}])
+                                         [:param/db :param/other-key]]]}
+                             {:consider-preprocessing-as-loading? false}])
           query3 (subscribe [::subs/query
                              {:queries [[:params {:db "b" :keys [:key3]}
                                          [:param/db
                                           {:field/data [:param/key]
                                            :field/alias :param/my-key}]]]}])]
 
+      (is (true? (:graphql/preprocessing? @query2)))
+      (is (false? (:graphql/loading? @query2)))
+      (is (true? (:graphql/preprocessing? @query3)))
+      (is (true? (:graphql/loading? @query3)))
       (wait-for [::events/normalize-response]
         (is (nil? (:graphql/errors @query2)))
         (is (nil? (:graphql/errors @query3)))
@@ -507,31 +515,36 @@
                                           [:items [:user/address]]]]]}
                              {:id :my-query}])]
 
+      (is (true? (:graphql/loading? (first @query1))))
+      (is (true? (:graphql/preprocessing? (first @query1))))
       (wait-for [::events/normalize-response]
-        (is (nil? (:graphql/errors @query1)))
+        (wait-for [::events/set-query-loading]
+          (is (nil? (:graphql/errors (first @query1))))
+          (is (true? (:graphql/loading? (first @query1))))
+          (is (false? (:graphql/preprocessing? (first @query1))))
 
-        (is (= {:total-count 1 :items [{:user/address "Street 1"}]}
-              (:search-users (first @query1))))
-
-        (set-response! {:search-users (fn []
-                                        {:total-count 2
-                                         :items (constantly
-                                                  [{:user/address "Street 2"}])})})
-
-        (dispatch [::events/query {:query {:queries [[:search-users
-                                                      {:some/param "b"
-                                                       :user/registered-after (t/date-time 2018 10 10)
-                                                       :user/age (bn/number "10e10")}
-                                                      [:total-count
-                                                       [:items [:user/address]]]]]}
-                                   :id :my-query}])
-
-        (wait-for [::events/normalize-response]
           (is (= {:total-count 1 :items [{:user/address "Street 1"}]}
-                (:search-users (first @query1))))
+                 (:search-users (first @query1))))
 
-          (is (= {:total-count 2 :items [{:user/address "Street 2"}]}
-                (:search-users (second @query1)))))))))
+          (set-response! {:search-users (fn []
+                                          {:total-count 2
+                                           :items (constantly
+                                                    [{:user/address "Street 2"}])})})
+
+          (dispatch [::events/query {:query {:queries [[:search-users
+                                                        {:some/param "b"
+                                                         :user/registered-after (t/date-time 2018 10 10)
+                                                         :user/age (bn/number "10e10")}
+                                                        [:total-count
+                                                         [:items [:user/address]]]]]}
+                                     :id :my-query}])
+
+          (wait-for [::events/normalize-response]
+            (is (= {:total-count 1 :items [{:user/address "Street 1"}]}
+                   (:search-users (first @query1))))
+
+            (is (= {:total-count 2 :items [{:user/address "Street 2"}]}
+                   (:search-users (second @query1))))))))))
 
 
 
@@ -664,7 +677,7 @@
 
       (wait-for [::events/normalize-response ::events/query-error*]
         (is (nil? (:graphql/errors @query1)))
-        
+
         (let [user (:user @query1)]
           (is (= user {:user/address "Street 123"
                        :user/registered-on (t/date-time 2018 10 10)
