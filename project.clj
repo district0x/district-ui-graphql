@@ -1,4 +1,4 @@
-(defproject district0x/district-ui-graphql "1.0.9-SNAPSHOT"
+(defproject district0x/district-ui-graphql "1.0.10-SNAPSHOT"
   :description "district UI module for GraphQL integration"
   :url "https://github.com/district0x/district-ui-graphql"
   :license {:name "Eclipse Public License"
@@ -19,13 +19,14 @@
                  [org.clojure/clojurescript "1.10.238"]
                  [re-frame "0.10.2"]]
 
-  :doo {:paths {:karma "./node_modules/karma/bin/karma"}}
+  :doo {:paths {:karma "./node_modules/karma/bin/karma"}
+        :karma {:config {"logLevel" "debug"}}}
 
   :clean-targets ^{:protect false} ["target" "tests-output"]
 
-  :npm {:devDependencies [[karma "1.7.1"]
-                          [karma-chrome-launcher "2.2.0"]
-                          [karma-cli "1.0.1"]
+  :npm {:devDependencies [[karma "4.3.0"]
+                          [karma-chrome-launcher "3.1.0"]
+                          [karma-cli "2.0.0"]
                           [karma-cljs-test "0.1.0"]]}
 
   :profiles {:dev {:dependencies [[com.cemerick/piggieback "0.2.2"]
@@ -34,7 +35,7 @@
                                   [org.clojure/tools.nrepl "0.2.13"]
                                   [print-foo-cljs "2.0.3"]]
                    :plugins [[lein-cljsbuild "1.1.7"]
-                             [lein-doo "0.1.9"]
+                             [lein-doo "0.1.10"]
                              [lein-npm "0.6.2"]]}}
 
   :deploy-repositories [["snapshots" {:url "https://clojars.org/repo"
