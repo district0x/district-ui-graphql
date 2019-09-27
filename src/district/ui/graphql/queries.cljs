@@ -122,3 +122,9 @@
 
 (defn id-queries [db id]
   (get-in db [db-key :id-queries id]))
+
+(defn set-authorization-token [db token]
+  (assoc-in db [db-key :authorization-token] token))
+
+(defn authorization-token [db]
+  (get-in db [db-key :authorization-token]))

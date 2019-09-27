@@ -10,16 +10,30 @@
     [district.ui.graphql.queries :as queries]
     [district.ui.graphql.utils :as utils]
     [graphql-query.core :refer [graphql-query]]
-    [re-frame.core :refer [reg-event-fx trim-v]]))
+    [re-frame.core :refer [reg-event-fx reg-event-db trim-v]]
+    [goog.object :as gobj]))
 
 (def interceptors [trim-v])
+
+(defn add-token-fetcher-middleware [data next]
+  (when-let [token (queries/authorization-token @re-frame.db/app-db)]
+    (when-not (.. data -options -headers)
+      (set! (.. data -options -headers) #js {}))
+    (gobj/set (.. data -options -headers) "authorization" (str "Bearer " token)))
+  (next))
+
+(reg-event-db
+ ::set-authorization-token
+ (fn [db [_ token]]
+   (queries/set-authorization-token db token)))
 
 (reg-event-fx
   ::start
   interceptors
   (fn [{:keys [:db]} [{:keys [:schema :url :query-middlewares :fetch-opts] :as opts}]]
     (let [fetcher (when url
-                    (js/apolloFetch.createApolloFetch (clj->js (merge {:uri url} fetch-opts))))
+                    (doto (js/apolloFetch.createApolloFetch (clj->js (merge {:uri url} fetch-opts)))
+                      (.use add-token-fetcher-middleware)))
           dataloader (utils/create-dataloader {:fetch-event [::fetch]
                                                :on-success [::normalize-response]
                                                :on-error [::query-error*]

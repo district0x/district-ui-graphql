@@ -10,7 +10,7 @@
    [district.ui.graphql.subs :as subs]
    [district.ui.graphql]
    [mount.core :as mount]
-   [re-frame.core :refer [reg-fx reg-event-fx subscribe reg-cofx reg-sub dispatch trim-v]]
+   [re-frame.core :refer [reg-fx reg-event-fx subscribe reg-cofx reg-sub dispatch dispatch-sync trim-v]]
    [re-frame.db :refer [app-db]]))
 
 
@@ -147,6 +147,25 @@
 
               (is (= "Street 1" (:user/address @(subscribe [::subs/entity :user 1]))))
               (is (= "b" (:param/db @(subscribe [::subs/entity :parameter {:param/id 123 :param/db "b"}])))))))))))
+
+(deftest auth-token-test
+  (let [request (atom nil)]
+    (run-test-async
+     (-> (mount/with-args {:graphql (assoc mount-args :customFetch (fn [_ req]
+                                                                     (reset! request req)
+                                                                     (js/Promise.resolve true)))})
+         (mount/start))
+
+     (dispatch-sync [:district.ui.graphql.events/set-authorization-token "the-token"])
+
+     (let [query1 @(subscribe [::subs/query {:queries [[:search-users
+                                                        {:user/registered-after (t/date-time 2018 10 10)
+                                                         :user/age (bn/number "10e10")}
+                                                        [:total-count]]]}])]
+       (wait-for [::events/normalize-response]
+                 (js/console.log "Request" @request)
+                 (is (true? (= "Bearer the-token"
+                               (.. @request -headers -authorization)))))))))
 
 
 (deftest query-batching
