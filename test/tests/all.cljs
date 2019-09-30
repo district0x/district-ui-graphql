@@ -128,30 +128,25 @@
                                                                   :user/favorite-numbers
                                                                   [:user/params {:param/other-key "kek"}
                                                                    [:param/db :param/other-key]]]]]]]}])]
-
         (is (true? (:graphql/loading? @query1)))
         (is (true? (:graphql/preprocessing? @query1)))
         (wait-for [::events/normalize-response]
           (wait-for [::events/set-query-loading]
-            (is (true? (:graphql/loading? @query1)))
-            (is (false? (:graphql/preprocessing? @query1)))
-            (is (nil? (:graphql/errors @query1)))
-            (wait-for [::events/set-query-loading]
-              (is (not (:graphql/loading? @query1)))
-              (let [{:keys [:items :total-count]} (:search-users @query1)
-                    {:keys [:user/address :user/registered-on :user/age :user/status :user/favorite-numbers :user/params :user/active?]}
-                    (first items)]
-                (is (= 1 (:total-count (:search-users @query1))))
-                (is (= address "Street 1"))
-                (is (t/equal? registered-on (t/date-time 2018 05 05)))
-                (is (bn/= age (bn/number "10e10")))
-                (is (= status :user.status/active))
-                (is (= favorite-numbers [1 2 3]))
-                (is (= params [{:param/db "b", :param/other-key "kek"}]))
-                (is (true? active?))
+            (is (not (:graphql/loading? @query1)))
+            (let [{:keys [:items :total-count]} (:search-users @query1)
+                  {:keys [:user/address :user/registered-on :user/age :user/status :user/favorite-numbers :user/params :user/active?]}
+                  (first items)]
+              (is (= 1 (:total-count (:search-users @query1))))
+              (is (= address "Street 1"))
+              (is (t/equal? registered-on (t/date-time 2018 05 05)))
+              (is (bn/= age (bn/number "10e10")))
+              (is (= status :user.status/active))
+              (is (= favorite-numbers [1 2 3]))
+              (is (= params [{:param/db "b", :param/other-key "kek"}]))
+              (is (true? active?))
 
-                (is (= "Street 1" (:user/address @(subscribe [::subs/entity :user 1]))))
-                (is (= "b" (:param/db @(subscribe [::subs/entity :parameter {:param/id 123 :param/db "b"}]))))))))))))
+              (is (= "Street 1" (:user/address @(subscribe [::subs/entity :user 1]))))
+              (is (= "b" (:param/db @(subscribe [::subs/entity :parameter {:param/id 123 :param/db "b"}])))))))))))
 
 
 (deftest query-batching
@@ -520,7 +515,7 @@
       (wait-for [::events/normalize-response]
         (wait-for [::events/set-query-loading]
           (is (nil? (:graphql/errors (first @query1))))
-          (is (true? (:graphql/loading? (first @query1))))
+          (is (false? (:graphql/loading? (first @query1))))
           (is (false? (:graphql/preprocessing? (first @query1))))
 
           (is (= {:total-count 1 :items [{:user/address "Street 1"}]}
