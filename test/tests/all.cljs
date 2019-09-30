@@ -151,21 +151,23 @@
 (deftest auth-token-test
   (let [request (atom nil)]
     (run-test-async
-     (-> (mount/with-args {:graphql (assoc mount-args :customFetch (fn [_ req]
-                                                                     (reset! request req)
-                                                                     (js/Promise.resolve true)))})
+     (-> (mount/with-args {:graphql (assoc-in mount-args [:fetch-opts :customFetch] (fn [_ req]
+                                                                                      (reset! request req)
+                                                                                      (js/Promise.resolve
+                                                                                       (js/Response. #js {} (clj->js {:status 200})))))})
          (mount/start))
 
-     (dispatch-sync [:district.ui.graphql.events/set-authorization-token "the-token"])
+     (testing "Authorization token should be set"
 
-     (let [query1 @(subscribe [::subs/query {:queries [[:search-users
-                                                        {:user/registered-after (t/date-time 2018 10 10)
-                                                         :user/age (bn/number "10e10")}
-                                                        [:total-count]]]}])]
-       (wait-for [::events/normalize-response]
-                 (js/console.log "Request" @request)
-                 (is (true? (= "Bearer the-token"
-                               (.. @request -headers -authorization)))))))))
+       (dispatch [:district.ui.graphql.events/set-authorization-token "the-token"])
+
+       (let [query1 (subscribe [::subs/query {:queries [[:search-users
+                                                         {:user/registered-after (t/date-time 2018 10 10)
+                                                          :user/age (bn/number "10e10")}
+                                                         [:total-count]]]}])]
+         (wait-for [::events/set-query-loading]
+                   (is (true? (= "Bearer the-token"
+                                 (.. @request -headers -authorization))))))))))
 
 
 (deftest query-batching
