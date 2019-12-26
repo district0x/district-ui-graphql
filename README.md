@@ -401,7 +401,9 @@ This module supports [GraphQL mutations](https://graphql.org/learn/queries/#muta
   }
   ")
   
-;; Following dispatch would perform 3 different mutations on the server in a single HTTP request. Response would contain fresh values of requested fields. Explicitely asking for :__typename will make sure entity values will be updated.
+;; Following dispatch would perform 3 different mutations on the server in a single HTTP request. 
+;; Response would contain fresh values of requested fields. 
+;; Explicitely asking for :__typename will make sure entity values will be updated.
 (dispatch [::events/mutation {:queries [[:add-user {:user/address "Street 999"
                                                     :user/age 22
                                                     :user/favorite-numbers [2 3 9]}
