@@ -1,8 +1,10 @@
 (ns district.ui.graphql.events
   (:require
+    [ajax.core :as ajax]
     [cljsjs.apollo-fetch]
     [cljsjs.graphql]
     [day8.re-frame.forward-events-fx]
+    [day8.re-frame.http-fx]
     [district.graphql-utils :as graphql-utils]
     [district.ui.graphql.effects :as effects]
     [district.ui.graphql.middleware.id-fields :refer [id-fields-middleware]]
@@ -23,9 +25,9 @@
   (next))
 
 (reg-event-db
- ::set-authorization-token
- (fn [db [_ token]]
-   (queries/set-authorization-token db token)))
+  ::set-authorization-token
+  (fn [db [_ token]]
+    (queries/set-authorization-token db token)))
 
 (reg-event-fx
   ::start
@@ -78,6 +80,46 @@
           {:forward-events {:register (str queries/db-key refetch-id)
                             :events refetch-on
                             :dispatch-to [::query (dissoc opts :refetch-on :refetch-id)]}})))))
+
+
+(reg-event-fx
+  ::mutation
+  interceptors
+  (fn [{:keys [:db]} [{:keys [:queries :variables] :as opts}]]
+    (let [{:keys [:url :kw->gql-name]} (queries/config db)
+          {:keys [:query :query-str] :as q} (utils/parse-query {:queries queries}
+                                                               {:kw->gql-name kw->gql-name})
+          opts (merge opts q)]
+
+      {:http-xhrio {:method :post
+                    :uri url
+                    :params {:query (str "mutation " query-str)}
+                    :timeout 10000
+                    :response-format (ajax/json-response-format {:keywords? true})
+                    :format (ajax/json-request-format)
+                    :on-success [::mutation-success opts]
+                    :on-failure [::mutation-error opts]}})))
+
+
+(reg-event-fx
+  ::mutation-success
+  interceptors
+  (fn [{:keys [:db]} [{:keys [:query :variables]} resp]]
+    (let [config (queries/config db)
+          resp (:data (graphql-utils/js->clj-response resp config))]
+
+      {:dispatch [::normalize-response resp {:query-clj (utils/query->clj
+                                                          query
+                                                          (:schema config)
+                                                          (merge config
+                                                                 {:variables variables}))}]})))
+
+
+(reg-event-fx
+  ::mutation-error
+  interceptors
+  (fn [{:keys [:db]} [errors {:keys [:query-str]}]]
+    {:dispatch [::set-query-errors {:errors errors :query-str query-str}]}))
 
 
 (reg-event-fx

@@ -368,6 +368,64 @@ Then somewhere else in your code, you'll have callback for scrolling event, wher
 
 Then the subscription will return collection of all query results.
 
+### Mutations
+This module supports [GraphQL mutations](https://graphql.org/learn/queries/#mutations) with proper normalisation of response data. 
+
+**Important Note:** Currently, if you want to normalise mutation response into entities, you must explicitly ask for `:__typename` in a response query, as seen in example:
+
+```clojure
+;; Let's assume following schema:
+(def schema "
+  scalar Date
+  scalar Keyword
+
+  type User {
+    user_id: ID
+    user_address: String
+    user_age: Int
+    user_favoriteNumbers: [Int]
+    user_params(param_otherKey: String): [Parameter]
+  }
+
+  type Parameter {
+    param_id: ID
+    param_db: ID
+    param_key: Keyword
+    param_otherKey: String
+  }
+
+  type Mutation {
+    addUser(user_address: String, user_age: Int, user_favoriteNumbers: [Int]): User!
+    addParameter(param_id: ID!, param_db: ID!): Parameter!
+    setCheckpoint: Boolean
+  }
+  ")
+  
+;; Following dispatch would perform 3 different mutations on the server in a single HTTP request. Response would contain fresh values of requested fields. Explicitely asking for :__typename will make sure entity values will be updated.
+(dispatch [::events/mutation {:queries [[:add-user {:user/address "Street 999"
+                                                    :user/age 22
+                                                    :user/favorite-numbers [2 3 9]}
+                                         [:user/id
+                                          :user/age
+                                          :user/favorite-numbers
+                                          :__typename
+                                          [:user/params {:param/other-key "kek"}
+                                           [:param/db
+                                            :param/other-key
+                                            :__typename]]]]
+                                        [:add-parameter {:param/id "tor"
+                                                         :param/db "db2"}
+                                         [:param/id
+                                          :param/db
+                                          :__typename]]
+                                        [:set-checkpoint]]}])  
+  
+  ;; In case we need to get response from :set-checkpoint in the UI, we can use:
+  @(subscribe [::subs/query {:queries [[:set-checkpoint]]}
+                            {:disable-fetch? true}])
+```
+
+
 ### Complex Queries
 The guide above didn't show all kinds of complex GraphQL queries including fragments, variables, aliases etc.
 These are all supported by this module, to see how they're used in action please inspect [tests](https://github.com/district0x/district-ui-graphql/blob/master/test/tests/all.cljs) and

@@ -1,17 +1,17 @@
 (ns district.ui.graphql.utils
   (:require
-   [bignumber.core :as bn]
-   [camel-snake-kebab.extras :refer [transform-keys]]
-   [cljs-time.coerce :as tc]
-   [cljs-time.core :as t]
-   [cljsjs.dataloader]
-   [clojure.set :as set]
-   [clojure.walk :as walk]
-   [contextual.core :as contextual]
-   [district.cljs-utils :as cljs-utils]
-   [district.graphql-utils :as graphql-utils]
-   [graphql-query.core :refer [graphql-query]]
-   [re-frame.core :refer [dispatch dispatch-sync]]))
+    [bignumber.core :as bn]
+    [camel-snake-kebab.extras :refer [transform-keys]]
+    [cljs-time.coerce :as tc]
+    [cljs-time.core :as t]
+    [cljsjs.dataloader]
+    [clojure.set :as set]
+    [clojure.walk :as walk]
+    [contextual.core :as contextual]
+    [district.cljs-utils :as cljs-utils]
+    [district.graphql-utils :as graphql-utils]
+    [graphql-query.core :refer [graphql-query]]
+    [re-frame.core :refer [dispatch dispatch-sync]]))
 
 (def parse-graphql (aget js/GraphQL "parse"))
 (def print-str-graphql (aget js/GraphQL "print"))
@@ -64,16 +64,23 @@
 
 (defn- query-path->graphql-type [schema query-path]
   (let [type-map (js-invoke schema "getTypeMap")
-        top-fields (-> schema
-                     (js-invoke "getQueryType")
-                     (js-invoke "getFields"))]
+        query-type (-> schema
+                     (js-invoke "getQueryType"))
+        mutation-type (-> schema
+                        (js-invoke "getMutationType"))
+        top-fields (js/Object.assign
+                     (when query-type
+                       (js-invoke query-type "getFields"))
+                     (when mutation-type
+                       (js-invoke mutation-type "getFields")))]
     (loop [fields top-fields
            query-path-rest query-path]
       (let [field-name (first query-path-rest)
             gql-type (if-let [typename (:typename field-name)]
                        (aget type-map typename)
                        (aget fields field-name "type"))
-            gql-type (if (instance? (aget js/GraphQL "GraphQLList") gql-type)
+            gql-type (if (or (instance? (aget js/GraphQL "GraphQLList") gql-type)
+                             (instance? (aget js/GraphQL "GraphQLNonNull") gql-type))
                        (aget gql-type "ofType")
                        gql-type)]
         (if (= 1 (count query-path-rest))
@@ -175,13 +182,13 @@
   "All path in maps that are only for supporting other maps with :__typename as only key are removed."
   [t]
   (walk/postwalk
-   (fn [x]
-     (when-not (or (and (map? x) (= (non-empty-keys x) #{:__typename})))
-       ;; this hack is to avoid map-entry since map-entry? doesn't seems to work inside walk
-       (if (and (sequential? x) (not= (count x) 2))
-         (into (empty x) (remove nil? x))
-         x)))
-   t))
+    (fn [x]
+      (when-not (or (and (map? x) (= (non-empty-keys x) #{:__typename})))
+        ;; this hack is to avoid map-entry since map-entry? doesn't seems to work inside walk
+        (if (and (sequential? x) (not= (count x) 2))
+          (into (empty x) (remove nil? x))
+          x)))
+    t))
 
 (defn remove-nil-vals [form]
   (walk/postwalk (fn [x]

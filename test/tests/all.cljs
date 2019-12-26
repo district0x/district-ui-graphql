@@ -1,20 +1,21 @@
 (ns tests.all
   (:require
-   [bignumber.core :as bn]
-   [cljs-time.core :as t]
-   [cljs.test :refer [deftest is testing run-tests async use-fixtures]]
-   [day8.re-frame.test :refer [run-test-async run-test-sync wait-for]]
-   [district.graphql-utils :as graphql-utils]
-   [district.ui.graphql.events :as events]
-   [district.ui.graphql.middleware.resolver :refer [create-resolver-middleware]]
-   [district.ui.graphql.subs :as subs]
-   [district.ui.graphql]
-   [mount.core :as mount]
-   [re-frame.core :refer [reg-fx reg-event-fx subscribe reg-cofx reg-sub dispatch dispatch-sync trim-v]]
-   [re-frame.db :refer [app-db]]))
+    [bignumber.core :as bn]
+    [cljs-time.core :as t]
+    [cljs.test :refer [deftest is testing run-tests async use-fixtures]]
+    [day8.re-frame.test :refer [run-test-async run-test-sync wait-for]]
+    [district.graphql-utils :as graphql-utils]
+    [district.ui.graphql.events :as events]
+    [district.ui.graphql.middleware.resolver :refer [create-resolver-middleware]]
+    [district.ui.graphql.subs :as subs]
+    [district.ui.graphql]
+    [mount.core :as mount]
+    [re-frame.core :refer [reg-fx reg-event-fx subscribe reg-cofx reg-sub dispatch trim-v]]
+    [re-frame.db :refer [app-db]]))
 
 
 (def gql-sync (aget js/GraphQL "graphqlSync"))
+(def gql (aget js/GraphQL "graphql"))
 (def build-schema (aget js/GraphQL "buildSchema"))
 (def parse-graphql (aget js/GraphQL "parse"))
 
@@ -27,9 +28,10 @@
   type Query {
     searchUsers(user_registeredAfter: Date, some_param: String, user_age: BigNumber): UserList
     params(db: String!, keys: [Keyword!]): [Parameter]
+    hello: String
   }
 
-  type UserList  {
+  type UserList {
     items: [User]
     totalCount: Int
   }
@@ -52,6 +54,12 @@
     param_otherKey: String
     param_creator: User
   }
+
+  type Mutation {
+    addUser(user_address: String, user_age: BigNumber, user_favoriteNumbers: [Int]): User!
+    addParameter(param_id: ID!, param_db: ID!): Parameter!
+    setCheckpoint: Boolean
+  }
   ")
 
 (def response-root-value (atom nil))
@@ -69,13 +77,31 @@
                             (graphql-utils/add-keyword-type)
                             (graphql-utils/add-date-type)
                             (graphql-utils/add-bignumber-type))
-                  query
-                  (graphql-utils/clj->js-root-value @response-root-value)
-                  {}
-                  (clj->js variables)
-                  nil)]
+                          query
+                          (graphql-utils/clj->js-root-value @response-root-value)
+                          {}
+                          (clj->js variables)
+                          nil)]
         (let [body (js/JSON.stringify res)]
           (resolve (js/Response. (clj->js body) (clj->js {:status 200}))))))))
+
+
+(reg-fx
+  :http-xhrio
+  (fn [{:keys [:params :on-success]}]
+    (println (graphql-utils/clj->js-root-value @response-root-value))
+    (let [promise (gql (-> (build-schema @response-schema)
+                         (graphql-utils/add-keyword-type)
+                         (graphql-utils/add-date-type)
+                         (graphql-utils/add-bignumber-type))
+                       (:query params)
+                       (graphql-utils/clj->js-root-value @response-root-value)
+                       {}
+                       (clj->js (:variables params)))]
+      (.then promise (fn [res]
+                       (println (js/JSON.stringify res))
+                       (dispatch (conj on-success res)))))))
+
 
 (use-fixtures
   :each
@@ -89,6 +115,7 @@
   (constantly nil))
 
 (def mount-args {:schema schema :url "http://localhost:1234/" :fetch-opts {:customFetch custom-fetch}})
+
 
 (deftest basic-query
   (run-test-async
@@ -151,23 +178,23 @@
 (deftest auth-token-test
   (let [request (atom nil)]
     (run-test-async
-     (-> (mount/with-args {:graphql (assoc-in mount-args [:fetch-opts :customFetch] (fn [_ req]
-                                                                                      (reset! request req)
-                                                                                      (js/Promise.resolve
-                                                                                       (js/Response. #js {} (clj->js {:status 200})))))})
-         (mount/start))
+      (-> (mount/with-args {:graphql (assoc-in mount-args [:fetch-opts :customFetch] (fn [_ req]
+                                                                                       (reset! request req)
+                                                                                       (js/Promise.resolve
+                                                                                         (js/Response. #js {} (clj->js {:status 200})))))})
+        (mount/start))
 
-     (testing "Authorization token should be set"
+      (testing "Authorization token should be set"
 
-       (dispatch [:district.ui.graphql.events/set-authorization-token "the-token"])
+        (dispatch [:district.ui.graphql.events/set-authorization-token "the-token"])
 
-       (let [query1 (subscribe [::subs/query {:queries [[:search-users
-                                                         {:user/registered-after (t/date-time 2018 10 10)
-                                                          :user/age (bn/number "10e10")}
-                                                         [:total-count]]]}])]
-         (wait-for [::events/set-query-loading]
-                   (is (true? (= "Bearer the-token"
-                                 (.. @request -headers -authorization))))))))))
+        (let [query1 (subscribe [::subs/query {:queries [[:search-users
+                                                          {:user/registered-after (t/date-time 2018 10 10)
+                                                           :user/age (bn/number "10e10")}
+                                                          [:total-count]]]}])]
+          (wait-for [::events/set-query-loading]
+            (is (true? (= "Bearer the-token"
+                          (.. @request -headers -authorization))))))))))
 
 
 (deftest query-batching
@@ -412,8 +439,8 @@
                                                                                         {:user/id 2
                                                                                          :user/active? false}))))})))))}}]
       (-> (mount/with-args {:graphql (merge mount-args
-                                       {:query-middlewares [(create-resolver-middleware :middleware1 middleware1)
-                                                            (create-resolver-middleware :middleware2 middleware2)]})})
+                                            {:query-middlewares [(create-resolver-middleware :middleware1 middleware1)
+                                                                 (create-resolver-middleware :middleware2 middleware2)]})})
         (mount/start)))
 
     (set-response! {:search-users (fn [{:keys [:user/registered-after :user/age]}]
@@ -600,7 +627,7 @@
 (deftest readme-tutorial
   (run-test-async
     (-> (mount/with-args {:graphql (merge mount-args
-                                     {:schema readme-tutorial-schema})})
+                                          {:schema readme-tutorial-schema})})
       (mount/start))
 
     (set-response! {:user (fn []
@@ -623,7 +650,7 @@
                                       :item/description "Some Item Description"
                                       :item/status status
                                       :item/price 123.456}])}
-      readme-tutorial-schema)
+                   readme-tutorial-schema)
 
     (let [query1 (subscribe [::subs/query {:queries [[:user
                                                       {:user/id "abc"}
@@ -668,7 +695,7 @@
 (deftest readme-tutorial-empty-items
   (run-test-async
     (-> (mount/with-args {:graphql (merge mount-args
-                                     {:schema readme-tutorial-schema})})
+                                          {:schema readme-tutorial-schema})})
       (mount/start))
 
     (set-response! {:user (fn []
@@ -679,7 +706,7 @@
                              :user/age (bn/number "10e10")
                              :user/premium-member? true
                              :user/cart-items []})}
-      readme-tutorial-schema)
+                   readme-tutorial-schema)
 
     (let [query1 (subscribe [::subs/query {:queries [[:user
                                                       {:user/id "abc"}
@@ -700,3 +727,61 @@
                        :user/age (bn/number "10e10")
                        :user/premium-member? true
                        :user/cart-items []})))))))
+
+
+(deftest mutation
+  (run-test-async
+    (-> (mount/with-args {:graphql (merge mount-args
+                                          {:schema schema})})
+      (mount/start))
+
+    (set-response! {:add-user (fn [args]
+                                (merge
+                                  args
+                                  {:user/id "aaa"
+                                   :user/age 22
+                                   :user/params (fn [{:keys [:param/other-key]}]
+                                                  [{:param/id "param1"
+                                                    :param/db "db1"
+                                                    :param/other-key other-key}])}))
+                    :add-parameter (fn [args]
+                                     args)
+                    :set-checkpoint (fn []
+                                      true)}
+                   schema)
+
+    (dispatch [::events/mutation {:queries [[:add-user {:user/address "Street 999"
+                                                        :user/age (bn/number "12e10")
+                                                        :user/favorite-numbers [2 3 9]}
+                                             [:user/id
+                                              :user/age
+                                              :user/favorite-numbers
+                                              :__typename
+                                              [:user/params {:param/other-key "kek"}
+                                               [:param/db
+                                                :param/other-key
+                                                :__typename]]]]
+                                            [:add-parameter {:param/id "tor"
+                                                             :param/db "db2"}
+                                             [:param/id
+                                              :param/db
+                                              :__typename]]
+                                            [:set-checkpoint]]}])
+
+    (wait-for [::events/mutation-success ::events/mutation-error]
+      (wait-for [::events/normalize-response]
+        (let [user @(subscribe [::subs/entity :user "aaa"])
+              param @(subscribe [::subs/entity :parameter {:param/id "tor" :param/db "db2"}])
+              query1 @(subscribe [::subs/query {:queries [[:set-checkpoint]]}
+                                  {:disable-fetch? true}])]
+          (is (= (:user/id user) "aaa"))
+          (is (= (:user/age user) 22))
+          (is (= (:user/favorite-numbers user) [2 3 9]))
+          (let [user-params (first (get (:user/params user) {:param/other-key "kek"}))]
+            (is (= (:param/db user-params) "db1"))
+            (is (= (:param/other-key user-params) "kek"))
+
+            (is (= "tor" (:param/id param)))
+            (is (= "db2" (:param/db param)))
+
+            (is (true? (:set-checkpoint query1)))))))))
