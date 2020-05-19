@@ -62,6 +62,16 @@
     seq))
 
 
+(defn- js-object-climb
+  "Climbs the given js/Object `object` by `key`, and returns
+  the last object which does not contain the given `key`."
+  [object key]
+  (loop [object object]
+    (if (aget object key)
+      (recur (aget object key))
+      object)))
+
+
 (defn- query-path->graphql-type [schema query-path]
   (let [type-map (js-invoke schema "getTypeMap")
         query-type (-> schema
@@ -81,7 +91,7 @@
                        (aget fields field-name "type"))
             gql-type (if (or (instance? (aget js/GraphQL "GraphQLList") gql-type)
                              (instance? (aget js/GraphQL "GraphQLNonNull") gql-type))
-                       (aget gql-type "ofType")
+                       (js-object-climb gql-type "ofType")
                        gql-type)]
         (if (= 1 (count query-path-rest))
           gql-type
