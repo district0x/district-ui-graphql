@@ -1,0 +1,44 @@
+version: 2.1
+jobs:
+  test:
+    working_directory: ~/ci
+    docker:
+      # Primary container image where all steps run.
+      - image: district0x/cljs-dev:latest
+    steps:
+      - checkout
+      
+      # Install Clojure Dependencies from Maven
+      # Install NodeJS Dependencies from NPM
+      - run: make deps
+
+      # Begin
+      - run: make test-headless
+
+  deploy:
+   machine: true
+   steps:
+     - checkout
+     - run:
+         name: Deploy to clojars
+         command: lein release :patch
+
+workflows:
+  version: 2
+  test_maybe_deploy_master_with_approval:
+    jobs:
+      - test
+      - hold:
+          type: approval
+          requires:
+            - test
+          filters:
+            branches:
+              only: master
+      - deploy:
+          context: district0x
+          requires:
+            - hold
+          filters:
+            branches:
+              only: master

@@ -21,14 +21,15 @@
                  [re-frame "0.10.2"]]
 
   :doo {:paths {:karma "./node_modules/karma/bin/karma"}
+        :build "tests"
         :karma {:config {"logLevel" "debug"}}}
 
   :clean-targets ^{:protect false} ["target" "tests-output"]
 
-  :npm {:devDependencies [[karma "4.3.0"]
-                          [karma-chrome-launcher "3.1.0"]
-                          [karma-cli "2.0.0"]
-                          [karma-cljs-test "0.1.0"]]}
+  :npm {:devDependencies [[karma "^4.4.1"]
+                          [karma-chrome-launcher "^3.1.0"]
+                          [karma-cli "^2.0.0"]
+                          [karma-cljs-test "^0.1.0"]]}
 
   :profiles {:dev {:dependencies [[com.cemerick/piggieback "0.2.2"]
                                   [day8.re-frame/test "0.1.5"]
