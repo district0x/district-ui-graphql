@@ -1,18 +1,18 @@
 (ns district.ui.graphql.utils
   (:require
-    [bignumber.core :as bn]
-    [camel-snake-kebab.extras :refer [transform-keys]]
-    [cljs-time.coerce :as tc]
-    [cljs-time.core :as t]
-    [cljsjs.dataloader]
-    [clojure.set :as set]
-    [clojure.walk :as walk]
-    [com.rpl.specter :as $ :include-macros true :refer-macros [select transform setval]]
-    [contextual.core :as contextual]
-    [district.cljs-utils :as cljs-utils]
-    [district.graphql-utils :as graphql-utils]
-    [graphql-query.core :refer [graphql-query]]
-    [re-frame.core :refer [dispatch dispatch-sync]]))
+   [bignumber.core :as bn]
+   [camel-snake-kebab.extras :refer [transform-keys]]
+   [cljs-time.coerce :as tc]
+   [cljs-time.core :as t]
+   [cljsjs.dataloader]
+   [clojure.set :as set]
+   [clojure.walk :as walk]
+   [com.rpl.specter :as $ :include-macros true :refer-macros [select transform setval]]
+   [contextual.core :as contextual]
+   [district.cljs-utils :as cljs-utils]
+   [district.graphql-utils :as graphql-utils]
+   [graphql-query.core :refer [graphql-query]]
+   [re-frame.core :refer [dispatch dispatch-sync]]))
 
 ;; Graphql Functions
 
@@ -80,25 +80,25 @@
 (defn- ancestors->query-path [ancestors & [{:keys [:use-aliases? :gql-name->kw]
                                             :or {gql-name->kw identity}}]]
   (->> ancestors
-    (remove (fn [node]
-              (or (not node)
-                  (= (aget node "kind") "OperationDefinition"))))
-    (map (fn [node]
-           (cond
-             (and use-aliases?
-                  (aget node "alias"))
-             (gql-name->kw (aget node "alias" "value"))
+       (remove (fn [node]
+                 (or (not node)
+                     (= (aget node "kind") "OperationDefinition"))))
+       (map (fn [node]
+              (cond
+                (and use-aliases?
+                     (aget node "alias"))
+                (gql-name->kw (aget node "alias" "value"))
 
-             (= (aget node "kind") "FragmentDefinition")
-             {:typename (gql-name->kw (aget node "typeCondition" "name" "value"))
-              :fragment (keyword (gql-name->kw (aget node "name" "value")))}
+                (= (aget node "kind") "FragmentDefinition")
+                {:typename (gql-name->kw (aget node "typeCondition" "name" "value"))
+                 :fragment (keyword (gql-name->kw (aget node "name" "value")))}
 
-             (aget node "name")
-             (gql-name->kw (aget node "name" "value"))
+                (aget node "name")
+                (gql-name->kw (aget node "name" "value"))
 
-             :else nil)))
-    (remove nil?)
-    seq))
+                :else nil)))
+       (remove nil?)
+       seq))
 
 
 (defn- js-object-climb
@@ -114,14 +114,14 @@
 (defn- query-path->graphql-type [schema query-path]
   (let [type-map (js-invoke schema "getTypeMap")
         query-type (-> schema
-                     (js-invoke "getQueryType"))
+                       (js-invoke "getQueryType"))
         mutation-type (-> schema
-                        (js-invoke "getMutationType"))
+                          (js-invoke "getMutationType"))
         top-fields (js/Object.assign
-                     (when query-type
-                       (js-invoke query-type "getFields"))
-                     (when mutation-type
-                       (js-invoke mutation-type "getFields")))]
+                    (when query-type
+                      (js-invoke query-type "getFields"))
+                    (when mutation-type
+                      (js-invoke mutation-type "getFields")))]
     (loop [fields top-fields
            query-path-rest query-path]
       (let [field-name (first query-path-rest)
@@ -140,14 +140,14 @@
 
 (defn graphql-type->id-field-names [gql-type]
   (->> (cljs-utils/js-obj->clj (js-invoke gql-type "getFields"))
-    (filter (fn [[_ v]]
-              (let [gql-type (aget v "type")
-                    name (if (instance? (aget js/GraphQL "GraphQLNonNull") gql-type)
-                           (aget gql-type "ofType" "name")
-                           (aget gql-type "name"))]
-                (= name "ID"))))
-    (map (comp name first))
-    set))
+       (filter (fn [[_ v]]
+                 (let [gql-type (aget v "type")
+                       name (if (instance? (aget js/GraphQL "GraphQLNonNull") gql-type)
+                              (aget gql-type "ofType" "name")
+                              (aget gql-type "name"))]
+                   (= name "ID"))))
+       (map (comp name first))
+       set))
 
 
 (defn get-id-fields-names [schema ancestors]
@@ -231,13 +231,16 @@
   "All path in maps that are only for supporting other maps with :__typename as only key are removed."
   [t]
   (walk/postwalk
-    (fn [x]
-      (when-not (or (and (map? x) (= (non-empty-keys x) #{:__typename})))
-        ;; this hack is to avoid map-entry since map-entry? doesn't seems to work inside walk
-        (if (and (sequential? x) (not= (count x) 2))
-          (into (empty x) (remove nil? x))
-          x)))
-    t))
+   (fn [x]
+     (when-not (or (and (map? x) (= (non-empty-keys x) #{:__typename})))
+       ;; this hack is to avoid map-entry since map-entry? doesn't seems to work inside walk
+       (if (and (sequential? x) (not= (count x) 2))
+         (into (empty x) (remove nil? x))
+         x)))
+   t))
+
+
+
 
 
 (defn remove-nil-vals
@@ -274,28 +277,28 @@
              (fn [& args]
                (let [value (last args)
                      path (butlast args)]
-                 (if (map? value)
-                   data)))))
+                 (if (map? value) nil)))
+             data))
 
 
 (defn query-clj-replace-aliases [query-clj]
   (walk/postwalk
-    (fn [node]
+   (fn [node]
 
-      (if (and (map? node)
-               (seq node)
-               (some meta (vals node)))
+     (if (and (map? node)
+              (seq node)
+              (some meta (vals node)))
 
-        (-> (reduce (fn [acc [k v]]
-                      (let [{:keys [:args :name]} (meta v)]
-                        (if (or name args)
-                          (assoc-in acc (remove nil? [(or name k) args]) v)
-                          (assoc acc k v))))
-                    {}
-                    node)
-          (with-meta (meta node)))
-        node))
-    (select-keys query-clj [:query])))
+       (-> (reduce (fn [acc [k v]]
+                     (let [{:keys [:args :name]} (meta v)]
+                       (if (or name args)
+                         (assoc-in acc (remove nil? [(or name k) args]) v)
+                         (assoc acc k v))))
+                   {}
+                   node)
+           (with-meta (meta node)))
+       node))
+   (select-keys query-clj [:query])))
 
 
 (defn replace-entities-with-refs [data {:keys [:query] :as query-clj} opts]
@@ -331,10 +334,13 @@
 
 
 (defn normalize-response [data query-clj opts]
+  (.log js/console "Data:" data)
+  (.log js/console "Query CLJ: " query-clj)
+  (.log js/console "Options:" opts)
   (-> data
-    (response-replace-aliases query-clj)
-    (->> (walk/postwalk identity))                          ;; ¯\_(ツ)_/¯ contextualize otherwise throws error, couldn't figure it out
-    (replace-entities-with-refs (query-clj-replace-aliases query-clj) opts)))
+      (response-replace-aliases query-clj)
+      (->> (walk/postwalk identity))                          ;; ¯\_(ツ)_/¯ contextualize otherwise throws error, couldn't figure it out
+      (replace-entities-with-refs (query-clj-replace-aliases query-clj) opts)))
 
 
 (defn- scalar-type-of? [x scalar-type-name]
@@ -499,23 +505,26 @@
 
 
 (defn create-dataloader [{:keys [:on-success :on-error :on-request :on-response :fetch-event] :as opts}]
-  (js/DataLoader.
-   (fn [query-configs]
-     (let [query-configs (vec query-configs)
-           {batched-query :query
-            batched-variables :variables} (apply batch-queries query-configs)
-           req-opts (merge opts
-                           {:query batched-query
-                            :variables batched-variables
-                            :query-configs query-configs})]
-       (this-as this
-         (js-invoke this "clearAll"))
-       (let [res-promise
-             (js/Promise.
-              (fn [resolve reject]
-                (dispatch (vec (concat fetch-event [req-opts])))
-                (resolve (.fill (js/Array. (count query-configs))))))]
-         res-promise)))))
+  (let [dt (atom nil)]
+    (reset!
+     dt
+     (js/DataLoader.
+      (fn [query-configs]
+        (let [query-configs (vec query-configs)
+              {batched-query :query
+               batched-variables :variables} (apply batch-queries query-configs)
+              req-opts (merge opts
+                              {:query batched-query
+                               :variables batched-variables
+                               :query-configs query-configs})]
+
+          (js-invoke @dt "clearAll")
+          (let [res-promise
+                (js/Promise.
+                 (fn [resolve reject]
+                   (dispatch (vec (concat fetch-event [req-opts])))
+                   (resolve (.fill (js/Array. (count query-configs))))))]
+            res-promise)))))))
 
 
 (defn parse-query [query {:keys [:kw->gql-name]}]
