@@ -49,7 +49,6 @@
 
 
 (def MAP-NIL-VALS
-  "Navigates over and recursively retrieves all map values within a data structure that are nil"
   ($/recursive-path
    [] path
    ($/cond-path
@@ -67,18 +66,57 @@
   [($/view #(map-indexed vector %)) INDEXED])
 
 
-(def PathWalker
+(def PATHWALKER
+  "Walks over the data structure, producing a navigation path of
+  collected values of each value traversed.
+
+  # Examples
+  (require '[com.rpl.specter :refer [select transform]])
+
+  ;; Select all paths
+  (select PATHWALKER [{:a {:b {:c [1 2 3]}}}])
+
+  ;; [[{:a {:b {:c [1 2 3]}}}]
+  ;;  [0 {:a {:b {:c [1 2 3]}}}]
+  ;;  [0 :a {:b {:c [1 2 3]}}]
+  ;;  [0 :a :b {:c [1 2 3]}]
+  ;;  [0 :a :b :c [1 2 3]]
+  ;;  [0 :a :b :c 0 1]
+  ;;  [0 :a :b :c 1 2]
+  ;;  [0 :a :b :c 2 3]]
+
+  ;; Select only paths that are maps
+  (select [PATHWALKER map?] [{:test? true} 123 true [1 2 3] {:children [1 2 {:foo :bar}]}])
+
+  ;; [[0 {:test? true}]
+  ;;  [4 {:children [1 2 {:foo :bar}]}]
+  ;;  [4 :children 2 {:foo :bar}]]
+
+  ;; Transform Structure, such that maps at a certain depth are tagged :depth --> true
+ 
+
+  (transform [PATHWALKER map?]
+    (fn [& args]
+      (let [node (last args)
+            path (butlast args)
+            path-depth (count path)]
+        (if (>= path-depth 2) {} node)))
+    {:children [{:children [{:children [{:children []}]}]}]})
+ 
+  ;; 
+
+  "
   ($/recursive-path
-   [] p
+   [] path
    ($/cond-path
-    map?     [INDEXED p]
-    vector?  [INDEXED-SEQ p]
-    $/STAY   $/STAY)))
+    map?           ($/stay-then-continue [INDEXED path])
+    vector?        ($/stay-then-continue [INDEXED-SEQ path])
+    $/STAY         $/STAY)))
 
 
-
-(defn- ancestors->query-path [ancestors & [{:keys [:use-aliases? :gql-name->kw]
-                                            :or {gql-name->kw identity}}]]
+(defn- ancestors->query-path
+  [ancestors & [{:keys [:use-aliases? :gql-name->kw]
+                 :or {gql-name->kw identity}}]]
   (->> ancestors
        (remove (fn [node]
                  (or (not node)
@@ -111,20 +149,22 @@
       object)))
 
 
-(defn- query-path->graphql-type [schema query-path]
+(defn- query-path->graphql-type
+  "Retrieves the GraphQL Type Object from the given GraphQLSchema
+  `schema` resolving from the given `query-path` sequence, consisting
+  of field-names"
+  [schema query-path]
   (let [type-map (js-invoke schema "getTypeMap")
-        query-type (-> schema
-                       (js-invoke "getQueryType"))
-        mutation-type (-> schema
-                          (js-invoke "getMutationType"))
-        top-fields (js/Object.assign
-                    (when query-type
-                      (js-invoke query-type "getFields"))
-                    (when mutation-type
-                      (js-invoke mutation-type "getFields")))]
-    (loop [fields top-fields
-           query-path-rest query-path]
-      (let [field-name (first query-path-rest)
+        query-type (-> schema (js-invoke "getQueryType"))
+        mutation-type (-> schema (js-invoke "getMutationType"))
+        fields (js/Object.assign
+                (when query-type
+                  (js-invoke query-type "getFields"))
+                (when mutation-type
+                  (js-invoke mutation-type "getFields")))]
+    (loop [fields fields
+           query-path query-path]
+      (let [field-name (first query-path)
             gql-type (if-let [typename (:typename field-name)]
                        (aget type-map typename)
                        (aget fields field-name "type"))
@@ -132,13 +172,14 @@
                              (instance? (aget js/GraphQL "GraphQLNonNull") gql-type))
                        (js-object-climb gql-type "ofType")
                        gql-type)]
-        (if (= 1 (count query-path-rest))
+        (if (<= (count query-path) 1)
           gql-type
           (recur (js-invoke gql-type "getFields")
-                 (rest query-path-rest)))))))
+                 (rest query-path)))))))
 
 
-(defn graphql-type->id-field-names [gql-type]
+(defn graphql-type->id-field-names
+  [gql-type]
   (->> (cljs-utils/js-obj->clj (js-invoke gql-type "getFields"))
        (filter (fn [[_ v]]
                  (let [gql-type (aget v "type")
@@ -240,11 +281,12 @@
    t))
 
 
-
-
-
 (defn remove-nil-vals
-  "Remove all map nil values from maps within the data structure"
+  "Remove all map nil values from maps within the data structure
+
+   Notes:
+
+   - Only removes map nil values."
   [form]
   (setval MAP-NIL-VALS $/NONE form))
 
@@ -273,11 +315,11 @@
 
 (defn *response-replace-aliases
   [data {:keys [:query] :as query-clj}]
-  (transform [PathWalker]
+  (transform [PATHWALKER map?]
              (fn [& args]
-               (let [value (last args)
+               (let [node (last args)
                      path (butlast args)]
-                 (if (map? value) nil)))
+                 node))
              data))
 
 

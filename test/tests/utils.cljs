@@ -1,5 +1,5 @@
 (ns tests.utils
-  (:require [cljs.test :refer [deftest is testing run-tests async use-fixtures]]
+  (:require [cljs.test :refer [deftest is are testing run-tests async use-fixtures]]
             [district.ui.graphql.utils :as utils]))
 
 
@@ -10,5 +10,26 @@
                    :__typename "UserList",
                    :total-count 0}}})
          {:data {:search-users {:items [], :__typename "UserList", :total-count 0}}})))
+
+
+(deftest remove-nil-vals
+  (are [x y] (= (utils/remove-nil-vals x) y)
+    {:test nil :children [nil {:a nil :b true :c "123"}]}
+    {:children [nil {:b true :c "123"}]}
+
+    [{:a nil :b []} {:a nil} {}]
+    [{:b []} {} {}]
+
+    [{:a '()}]
+    [{:a '()}]
+
+    [{:a '({:a nil :b false})}]
+    [{:a '({:b false})}]
+
+    [{:a #{}}]
+    [{:a #{}}]
+
+    [[[{:a [:a :b nil {:d nil}]}]]]
+    [[[{:a [:a :b nil {}]}]]]))
 
 

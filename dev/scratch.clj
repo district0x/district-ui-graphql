@@ -16,13 +16,18 @@
     :timestamp 2234532}])
 
 
-(def NIL-VALS
+(select [0 :type] data)
+
+
+(def MAP-NIL-VALS
   ($/recursive-path
    [] path
    ($/cond-path
     map? [$/MAP-VALS ($/if-path nil? $/STAY path)]
     coll? [$/ALL path])))
 
+(setval MAP-NIL-VALS $/NONE data)
+(setval MAP-NIL-VALS $/NONE {:test nil :children [nil {:a nil :b true :c "123"}]})
 
 (def INDEXED
   "A path that visits v and collects k in [[k v], ...]."
@@ -34,26 +39,37 @@
   [($/view #(map-indexed vector %)) INDEXED])
 
 
-(def PathWalker
+(def PATHWALKER
   ($/recursive-path
-   [] p
+   [] path
    ($/cond-path
-    map?     [INDEXED p]
-    vector?  [INDEXED-SEQ p]
-    $/STAY   $/STAY)))
+    map?           ($/stay-then-continue [INDEXED path])
+    vector?        ($/stay-then-continue [INDEXED-SEQ path])
+    $/STAY         $/STAY)))
 
 
-(setval NIL-VALS $/NONE data)
+(select [PATHWALKER map?] data)
+(select [PATHWALKER map?] [{:a true} 123 true])
+(println (select PATHWALKER [{:a {:b {:c [1 2 3]}}}]))
+(println (select [PATHWALKER map?] [{:test? true} 123 true [1 2 3] {:children [1 2 {:foo :bar}]}]))
 
 
-(select [PathWalker] data)
+(defn tag-max-depth [max-depth & args]
+  (let [node (last args)
+        path (butlast args)
+        path-depth (-> path count inc)]
+    (if (>= path-depth max-depth) (assoc node :deep true) node)))
 
-(transform [PathWalker]
+
+(def test-data {:children [{:children [{:children [{:children []}]}]}]})
+(select [PATHWALKER map?] test-data)
+(transform [PATHWALKER map?] (partial tag-max-depth 2) test-data)
+
+(transform [PATHWALKER #(and (map? %) (contains? % :timestamp))]
   (fn [& args]
-   (let [value (last args)
-         path (butlast args)]
-     (if (number? value)
-       (inc value))))
+    (let [node (last args)
+          path  (butlast args)]
+      (update node :timestamp inc)))
   data)
 
 
@@ -65,4 +81,4 @@
    ($/cond-path
     ($/pred afn) $/STAY
     coll?        [$/ALL path])))
-               
+
