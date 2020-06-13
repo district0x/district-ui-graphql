@@ -1,4 +1,4 @@
-(defproject district0x/district-ui-graphql "1.0.12-SNAPSHOT"
+(defproject district0x/district-ui-graphql "1.1.0-SNAPSHOT"
   :description "district UI module for GraphQL integration"
   :url "https://github.com/district0x/district-ui-graphql"
   :license {:name "Eclipse Public License"
@@ -18,7 +18,8 @@
                  [madvas/contextual "0.1.0"]
                  [mount "0.1.11"]
                  [org.clojure/clojurescript "1.10.238"]
-                 [re-frame "0.10.2"]]
+                 [re-frame "0.10.2"]
+                 [com.rpl/specter "1.1.3"]]
 
   :doo {:paths {:karma "./node_modules/karma/bin/karma"}
         :build "tests"
@@ -31,7 +32,8 @@
                           [karma-cli "^2.0.0"]
                           [karma-cljs-test "^0.1.0"]]}
 
-  :profiles {:dev {:dependencies [[com.cemerick/piggieback "0.2.2"]
+  :profiles {:dev {:source-paths ["src" "test" "dev"]
+                   :dependencies [[com.cemerick/piggieback "0.2.2"]
                                   [day8.re-frame/test "0.1.5"]
                                   [org.clojure/clojure "1.8.0"]
                                   [org.clojure/tools.nrepl "0.2.13"]

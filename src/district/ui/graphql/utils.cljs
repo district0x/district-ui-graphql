@@ -7,17 +7,24 @@
     [cljsjs.dataloader]
     [clojure.set :as set]
     [clojure.walk :as walk]
+    [com.rpl.specter :as $ :include-macros true :refer-macros [select transform setval]]
     [contextual.core :as contextual]
     [district.cljs-utils :as cljs-utils]
     [district.graphql-utils :as graphql-utils]
     [graphql-query.core :refer [graphql-query]]
     [re-frame.core :refer [dispatch dispatch-sync]]))
 
+;; Graphql Functions
+
 (def parse-graphql (aget js/GraphQL "parse"))
 (def print-str-graphql (aget js/GraphQL "print"))
 (def visit (aget js/GraphQL "visit"))
 (def gql-build-schema (aget js/GraphQL "buildSchema"))
 (def typename-field :__typename)
+
+
+;; Object Creation
+
 
 (defn create-field-node [name]
   {:kind "Field"
@@ -36,6 +43,38 @@
     true (graphql-utils/add-keyword-type {:disable-serialize? true})
     true (graphql-utils/add-date-type {:disable-serialize? true})
     true (graphql-utils/add-bignumber-type)))
+
+
+;; Specter Navigation Functions
+
+
+(def MAP-NIL-VALS
+  "Navigates over and recursively retrieves all map values within a data structure that are nil"
+  ($/recursive-path
+   [] path
+   ($/cond-path
+    map?  [$/MAP-VALS ($/if-path nil? $/STAY path)]
+    coll? [$/ALL path])))
+
+
+(def INDEXED
+  "A path that visits v and collects k in [[k v], ...]."
+  [$/ALL ($/collect-one $/FIRST) $/LAST])
+
+
+(def INDEXED-SEQ
+  "A selector that visits all elements of a seq, and collects their indices."
+  [($/view #(map-indexed vector %)) INDEXED])
+
+
+(def PathWalker
+  ($/recursive-path
+   [] p
+   ($/cond-path
+    map?     [INDEXED p]
+    vector?  [INDEXED-SEQ p]
+    $/STAY   $/STAY)))
+
 
 
 (defn- ancestors->query-path [ancestors & [{:keys [:use-aliases? :gql-name->kw]
@@ -200,12 +239,11 @@
           x)))
     t))
 
-(defn remove-nil-vals [form]
-  (walk/postwalk (fn [x]
-                   (if (map? x)
-                     (into {} (remove #(nil? (second %)) x))
-                     x))
-                 form))
+
+(defn remove-nil-vals
+  "Remove all map nil values from maps within the data structure"
+  [form]
+  (setval MAP-NIL-VALS $/NONE form))
 
 
 (defn response-replace-aliases [data {:keys [:query] :as query-clj}]
@@ -217,17 +255,27 @@
                          (if (map? dectx-node)
                            (let [path (seq (remove number? (contextual/context node)))]
                              (reduce
-                               (fn [acc [key value]]
-                                 (let [{:keys [:name :args]} (meta (get-in query (concat path [key])))]
-                                   (update-in acc (remove nil? [(or name key) args]) merge-in-colls value)))
-                               {}
-                               dectx-node))
+                              (fn [acc [key value]]
+                                (let [{:keys [:name :args]} (meta (get-in query (concat path [key])))]
+                                  (update-in acc (remove nil? [(or name key) args]) merge-in-colls value)))
+                              {}
+                              dectx-node))
                            dectx-node)
                          (catch :default _
                            dectx-node)))
                      (catch :default _
                        node)))
                  (contextual/contextualize data)))
+
+
+(defn *response-replace-aliases
+  [data {:keys [:query] :as query-clj}]
+  (transform [PathWalker]
+             (fn [& args]
+               (let [value (last args)
+                     path (butlast args)]
+                 (if (map? value)
+                   data)))))
 
 
 (defn query-clj-replace-aliases [query-clj]
@@ -451,25 +499,23 @@
 
 
 (defn create-dataloader [{:keys [:on-success :on-error :on-request :on-response :fetch-event] :as opts}]
-  (let [dt (atom nil)]
-    (reset!
-      dt
-      (js/DataLoader.
-        (fn [query-configs]
-          (let [query-configs (vec query-configs)
-                {batched-query :query
-                 batched-variables :variables} (apply batch-queries query-configs)
-                req-opts (merge opts
-                                {:query batched-query
-                                 :variables batched-variables
-                                 :query-configs query-configs})]
-            (js-invoke @dt "clearAll")
-            (let [res-promise
-                  (js/Promise.
-                    (fn [resolve reject]
-                      (dispatch (vec (concat fetch-event [req-opts])))
-                      (resolve (.fill (js/Array. (count query-configs))))))]
-              res-promise)))))))
+  (js/DataLoader.
+   (fn [query-configs]
+     (let [query-configs (vec query-configs)
+           {batched-query :query
+            batched-variables :variables} (apply batch-queries query-configs)
+           req-opts (merge opts
+                           {:query batched-query
+                            :variables batched-variables
+                            :query-configs query-configs})]
+       (this-as this
+         (js-invoke this "clearAll"))
+       (let [res-promise
+             (js/Promise.
+              (fn [resolve reject]
+                (dispatch (vec (concat fetch-event [req-opts])))
+                (resolve (.fill (js/Array. (count query-configs))))))]
+         res-promise)))))
 
 
 (defn parse-query [query {:keys [:kw->gql-name]}]
