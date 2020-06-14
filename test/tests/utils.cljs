@@ -33,3 +33,71 @@
     [[[{:a [:a :b nil {}]}]]]))
 
 
+(deftest empty-with-nils?
+  (are [x y] (= (utils/empty-with-nils? x) y)
+    []
+    true
+
+    [nil nil nil]
+    true
+
+    [:a :b]
+    false
+
+    [:a :b nil]
+    false))
+
+
+(deftest remove-empty-keys
+  (are [x y] (= (utils/remove-empty-keys x) y)
+    {:a nil}
+    {}
+
+    {:a true}
+    {:a true}
+
+    {:a []}
+    {}
+
+    {:a [nil nil nil]}
+    {}
+
+    {:a nil :b [nil] :c [nil nil :d] :e []}
+    {:c [nil nil :d]}))
+
+
+(deftest non-empty-keys
+  (are [x y] (= (utils/non-empty-keys x) y)
+    {:a nil :__typename "Test"}
+    #{:__typename}
+
+    {:a [nil nil nil] :b true :c true :d nil :e []}
+    #{:b :c}))
+
+ 
+(deftest ensure-count
+  (are [args result] (= (utils/ensure-count (first args) (second args)) result)
+
+    [[{}] 1]
+    [{}]
+
+    [[{}] 2]
+    [{} {}]
+
+    [[{}] 0]
+    [{}]
+    
+    [[{:__typename "Test"}] 1]
+    [{:__typename "Test"}]
+
+    [[{:__typename "Test"}] 2]
+    [{:__typename "Test"} {:__typename "Test"}]
+
+    [[{:__typename "Test"} {}] 2]
+    [{:__typename "Test"} {}]
+
+    [[{:__typename "Test"} {}] 3]
+    [{:__typename "Test"} {} {:__typename "Test"}]
+
+    [[{:__typename "Test"} {}] 4]
+    [{:__typename "Test"} {} {:__typename "Test"} {:__typename "Test"}]))

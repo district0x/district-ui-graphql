@@ -82,3 +82,96 @@
     ($/pred afn) $/STAY
     coll?        [$/ALL path])))
 
+
+(defn non-empty-keys
+  "Given a map return the set of empty keys.
+  All this are considered empty keys
+  {:a nil
+   :b []
+   :c [nil nil nil]}"
+  [m]
+  (set (keep (fn [[k v]]
+               (when-not (or (nil? v)
+                             (and (sequential? v)
+                                  (empty? (remove nil? v))))
+                 k))
+             m)))
+
+#_(non-empty-keys
+   {:a nil
+    :b []
+    :c [nil nil nil]
+    :__typename "test"})
+
+
+(defn empty-with-nils?
+  "Is the sequence empty if you remove the nil elements?"
+  [coll]
+  (->> coll (remove nil?) empty?))
+
+
+(defn remove-empty-keys
+  "Removes all keys from the map if:
+
+   - the value is nil
+
+   - the value is a sequential collection, and is empty if you remove the nil elements."
+  [m]
+  (setval [$/MAP-VALS ($/if-path sequential? empty-with-nils? nil?)] $/NONE m))
+
+
+(defn non-empty-keys
+  "Retrieve the list of keys with values that are 'non-empty'.
+  
+  # Notes
+  
+  - Please refer to `remove-empty-keys`."
+  [m]
+  (-> m remove-empty-keys keys set))
+
+
+#_(remove-empty-keys {:a nil
+                      :b []
+                      :c [nil nil nil]
+                      :__typename "test"})
+
+
+(defn- ensure-count
+  "Ensures the sequence of map values `map-seq` has `n` values by
+  repeating the first map sequence element to satisfy `n` elements in
+  the sequence.
+
+  # Notes
+
+  - Preserves the key `:__typename` in the first element when repeating"
+  [map-seq n]
+  (let [num-offset (max (- n (count map-seq)) 0)
+        repeat-value (if-let [typename (-> map-seq first :__typename)]
+                       {:__typename typename}
+                       {})
+        repeat-seq (repeat num-offset repeat-value)]
+    ;; Append `repeat-seq` to the end of the `map-seq`
+    (setval [$/END] map-seq repeat-seq)))
+
+
+#_(ensure-count [{:a 123 :__typename "Category"} {}] 4)
+
+
+(letfn [(merge-in-colls* [a b]
+          (cond
+            (map? a)
+            (merge-with merge-in-colls* a b)
+
+            (and (sequential? a)
+                 (sequential? b)
+                 (or (map? (first a))
+                     (map? (first b))))
+            (let [c (max (count a) (count b))]
+              (mapv (partial reduce merge-in-colls*)
+                    (partition 2 (interleave (ensure-count a c) (ensure-count b c)))))
+
+            :else b))]
+  (defn merge-in-colls
+    "Merge multiple nested maps. Merges maps in collections as well"
+    [& args]
+    (reduce merge-in-colls* nil args)))

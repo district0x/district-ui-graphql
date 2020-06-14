@@ -148,7 +148,6 @@
       (recur (aget object key))
       object)))
 
-
 (defn- query-path->graphql-type
   "Retrieves the GraphQL Type Object from the given GraphQLSchema
   `schema` resolving from the given `query-path` sequence, consisting
@@ -227,11 +226,22 @@
   (get-in entities [type id]))
 
 
-(defn- ensure-count [map-seq c]
-  (concat map-seq (repeat (max (- c (count map-seq)) 0)
-                          (if-let [typename (:__typename (first map-seq))]
-                            {:__typename typename}
-                            {}))))
+(defn- ensure-count
+  "Ensures the sequence of map values `map-seq` has `n` values by
+  repeating the first map sequence element to satisfy `n` elements in
+  the sequence.
+
+  # Notes
+
+  - Preserves the key `:__typename` in the first element when repeating"
+  [map-seq n]
+  (let [num-offset (max (- n (count map-seq)) 0)
+        repeat-value (if-let [typename (-> map-seq first :__typename)]
+                       {:__typename typename}
+                       {})
+        repeat-seq (repeat num-offset repeat-value)]
+    ;; Append `repeat-seq` to the end of the `map-seq`
+    (setval [$/END] repeat-seq map-seq)))
 
 
 (letfn [(merge-in-colls* [a b]
@@ -253,19 +263,31 @@
     [& args]
     (reduce merge-in-colls* nil args)))
 
-(defn non-empty-keys
-  "Given a map return the set of empty keys.
-  All this are considered empty keys
-  {:a nil
-   :b []
-   :c [nil nil nil]}"
+
+(defn empty-with-nils?
+  "Is the sequence empty if you remove the nil elements?"
+  [coll]
+  (->> coll (remove nil?) empty?))
+
+
+(defn remove-empty-keys
+  "Removes all keys from the map if:
+
+   - the value is nil
+
+   - the value is a sequential collection, and is empty if you remove the nil elements."
   [m]
-  (set (keep (fn [[k v]]
-               (when-not (or (nil? v)
-                             (and (sequential? v)
-                                  (empty? (remove nil? v))))
-                 k))
-             m)))
+  (setval [$/MAP-VALS ($/if-path sequential? empty-with-nils? nil?)] $/NONE m))
+
+
+(defn non-empty-keys
+  "Retrieve the list of keys with values that are 'non-empty'.
+  
+  # Notes
+  
+  - Please refer to `remove-empty-keys`."
+  [m]
+  (-> m remove-empty-keys keys set))
 
 
 (defn remove-empty-typename-paths
@@ -282,11 +304,13 @@
 
 
 (defn remove-nil-vals
-  "Remove all map nil values from maps within the data structure
+  "Recursively remove all map key-value pairs that have nil values.
 
    Notes:
 
-   - Only removes map nil values."
+   - This includes nested maps within the data structure.
+
+   - Only removes map key-value pairs that have a value that are nil."
   [form]
   (setval MAP-NIL-VALS $/NONE form))
 
@@ -319,7 +343,8 @@
              (fn [& args]
                (let [node (last args)
                      path (butlast args)]
-                 node))
+                 (loop [node node acc {}]
+                   (let []))))
              data))
 
 
