@@ -342,9 +342,17 @@
   (transform [PATHWALKER map?]
              (fn [& args]
                (let [node (last args)
-                     path (butlast args)]
-                 (loop [node node acc {}]
-                   (let []))))
+                     path (-> args butlast vec)]
+                 (loop [result {}
+                        kv-node (vec node)]
+                   (let [{:keys [key value]} (first kv-node)
+                         query-path (conj path key)
+                         {:keys [name args]} (-> query (get-in query-path) meta)
+                         result-path (remove nil? [(or name key) args])]
+                     (if-not (empty? kv-node)
+                       (recur (update-in result result-path merge-in-colls value)
+                              (rest kv-node))
+                       result)))))
              data))
 
 

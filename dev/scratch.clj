@@ -157,21 +157,26 @@
 #_(ensure-count [{:a 123 :__typename "Category"} {}] 4)
 
 
-(letfn [(merge-in-colls* [a b]
+(letfn [(merge-in-colls* [xs ys]
           (cond
-            (map? a)
-            (merge-with merge-in-colls* a b)
+            (map? xs)
+            (merge-with merge-in-colls* xs ys)
 
-            (and (sequential? a)
-                 (sequential? b)
-                 (or (map? (first a))
-                     (map? (first b))))
-            (let [c (max (count a) (count b))]
+            (and (sequential? xs)
+                 (sequential? ys)
+                 (or (map? (first xs))
+                     (map? (first ys))))
+            (let [num-elements (max (count xs) (count ys))]
               (mapv (partial reduce merge-in-colls*)
-                    (partition 2 (interleave (ensure-count a c) (ensure-count b c)))))
+                    (partition 2 (interleave (ensure-count xs num-elements) (ensure-count ys num-elements)))))
 
-            :else b))]
+            :else ys))]
   (defn merge-in-colls
     "Merge multiple nested maps. Merges maps in collections as well"
     [& args]
     (reduce merge-in-colls* nil args)))
+
+#_(merge-in-colls
+   [{:a [{} {} {}]}]
+   [{:a [{} {} {}]}]
+   [{:a [{} {} {}]}])
