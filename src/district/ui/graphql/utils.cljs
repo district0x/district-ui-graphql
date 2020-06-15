@@ -5,6 +5,7 @@
    [cljs-time.coerce :as tc]
    [cljs-time.core :as t]
    [cljsjs.dataloader]
+   [clojure.pprint :refer [pprint]]
    [clojure.set :as set]
    [clojure.walk :as walk]
    [com.rpl.specter :as $ :include-macros true :refer-macros [select transform setval]]
@@ -109,8 +110,8 @@
   ($/recursive-path
    [] path
    ($/cond-path
-    map?           ($/stay-then-continue [INDEXED path])
-    vector?        ($/stay-then-continue [INDEXED-SEQ path])
+    map?           ($/continue-then-stay [INDEXED path])
+    vector?        ($/continue-then-stay [INDEXED-SEQ path])
     $/STAY         $/STAY)))
 
 
@@ -295,7 +296,7 @@
   [t]
   (walk/postwalk
    (fn [x]
-     (when-not (or (and (map? x) (= (non-empty-keys x) #{:__typename})))
+     (when-not (and (map? x) (= (non-empty-keys x) #{:__typename}))
        ;; this hack is to avoid map-entry since map-entry? doesn't seems to work inside walk
        (if (and (sequential? x) (not= (count x) 2))
          (into (empty x) (remove nil? x))
@@ -315,45 +316,67 @@
   (setval MAP-NIL-VALS $/NONE form))
 
 
-(defn response-replace-aliases [data {:keys [:query] :as query-clj}]
-  (walk/postwalk (fn [node]
-                   (try
-                     (let [dectx-node (contextual/decontextualize node)]
+(defn response-replace-aliases
+  [data {:keys [:query] :as query-clj}]
+  (let [result
+        (walk/postwalk (fn [node]
+                         (try
+                           (let [dectx-node (contextual/decontextualize node)]
 
-                       (try
-                         (if (map? dectx-node)
-                           (let [path (seq (remove number? (contextual/context node)))]
-                             (reduce
-                              (fn [acc [key value]]
-                                (let [{:keys [:name :args]} (meta (get-in query (concat path [key])))]
-                                  (update-in acc (remove nil? [(or name key) args]) merge-in-colls value)))
-                              {}
-                              dectx-node))
-                           dectx-node)
-                         (catch :default _
-                           dectx-node)))
-                     (catch :default _
-                       node)))
-                 (contextual/contextualize data)))
+                             (try
+                               (if (map? dectx-node)
+                                 (let [path (seq (remove number? (contextual/context node)))]
+                                   (reduce
+                                    (fn [acc [key value]]
+                                      (let [query-path (concat path [key])
+                                            _ (println "Query Path" query-path)
+                                            {:keys [:name :args] :as query-metadata} (meta (get-in query (concat path [key])))
+                                            _ (println "Meta Query")
+                                            _ (pprint query-metadata)
+                                            result-path (remove nil? [(or name key) args])
+                                            _ (println "Result Path" result-path)]
+                                        (update-in acc result-path merge-in-colls value)))
+                                    {}
+                                    dectx-node))
+                                 dectx-node)
+                               (catch :default _
+                                 dectx-node)))
+                           (catch :default _
+                             node)))
+                       (contextual/contextualize data))]
+    (println "Result")
+    (pprint result)
+    result))
 
 
 (defn *response-replace-aliases
   [data {:keys [:query] :as query-clj}]
-  (transform [PATHWALKER map?]
-             (fn [& args]
-               (let [node (last args)
-                     path (-> args butlast vec)]
-                 (loop [result {}
-                        kv-node (vec node)]
-                   (let [{:keys [key value]} (first kv-node)
-                         query-path (conj path key)
-                         {:keys [name args]} (-> query (get-in query-path) meta)
-                         result-path (remove nil? [(or name key) args])]
-                     (if-not (empty? kv-node)
-                       (recur (update-in result result-path merge-in-colls value)
-                              (rest kv-node))
-                       result)))))
-             data))
+  (let [result
+        (transform [PATHWALKER map?]
+                   (fn [& args]
+                     (let [node (last args)
+                           path (-> args butlast vec)
+                           result (reduce
+                                   (fn [acc [key value]]
+                                     (let [query-path (->> (conj path key) (remove number?))
+                                           _ (println "Query Path" query-path)
+                                           {:keys [:name :args] :as query-metadata} (-> (get-in query query-path) meta)
+                                           _ (println "Meta Query")
+                                           _ (pprint query-metadata)
+                                           result-path (remove nil? [(or name key) args])
+                                           _ (println "Result Path" result-path)]
+                                       (assoc-in acc result-path value)))
+                                   {}
+                                   node)]
+                       (println "Before")
+                       (pprint node)
+                       (println "After")
+                       (pprint result)
+                       result))
+                   data)]
+    (println "Result")
+    (pprint data)
+    data))
 
 
 (defn query-clj-replace-aliases [query-clj]
@@ -379,42 +402,42 @@
 (defn replace-entities-with-refs [data {:keys [:query] :as query-clj} opts]
   (let [entities (atom {})
         graph (walk/postwalk
-                (fn [node]
-                  (try
-                    (let [dectx-node (contextual/decontextualize node)]
-                      (try
-                        (if (map? dectx-node)
-                          (let [path (seq (remove number? (contextual/context node)))
-                                id-field-names (:id-field-names (meta (get-in query path)))]
-                            (cond
-                              (entity? dectx-node id-field-names)
-                              (let [dectx-node (update dectx-node typename-field (:gql-name->kw opts))
-                                    ref (get-ref dectx-node id-field-names)]
-                                (swap! entities #(update-entity % ref dectx-node))
-                                ref)
+               (fn [node]
+                 (try
+                   (let [dectx-node (contextual/decontextualize node)]
+                     (try
+                       (if (map? dectx-node)
+                         (let [path (seq (remove number? (contextual/context node)))
+                               id-field-names (:id-field-names (meta (get-in query path)))]
+                           (cond
+                             (entity? dectx-node id-field-names)
+                             (let [dectx-node (update dectx-node typename-field (:gql-name->kw opts))
+                                   ref (get-ref dectx-node id-field-names)]
+                               (swap! entities #(update-entity % ref dectx-node))
+                               ref)
 
-                              (contains-typename? dectx-node)
-                              (let [dectx-node (update dectx-node typename-field (:gql-name->kw opts))]
-                                dectx-node)
+                             (contains-typename? dectx-node)
+                             (let [dectx-node (update dectx-node typename-field (:gql-name->kw opts))]
+                               dectx-node)
 
-                              :else dectx-node))
-                          dectx-node)
-                        (catch :default _
-                          dectx-node)))
-                    (catch :default _
-                      node)))
-                (contextual/contextualize data))]
+                             :else dectx-node))
+                         dectx-node)
+                       (catch :default _
+                         dectx-node)))
+                   (catch :default _
+                     node)))
+               (contextual/contextualize data))]
     {:entities @entities
      :graph graph}))
 
 
 (defn normalize-response [data query-clj opts]
-  (.log js/console "Data:" data)
-  (.log js/console "Query CLJ: " query-clj)
-  (.log js/console "Options:" opts)
+  (println "Data")
+  (pprint data)
+  (println "Query CLJ")
+  (pprint query-clj)
   (-> data
       (response-replace-aliases query-clj)
-      (->> (walk/postwalk identity))                          ;; ¯\_(ツ)_/¯ contextualize otherwise throws error, couldn't figure it out
       (replace-entities-with-refs (query-clj-replace-aliases query-clj) opts)))
 
 
@@ -443,8 +466,8 @@
 (defn- serialize-args [args {:keys [:gql-name->kw]}]
   (let [args (js->clj args)
         args (when (seq args) (->> args
-                                (transform-keys gql-name->kw)
-                                (cljs-utils/transform-vals scalar-arg-vals->str)))]
+                                   (transform-keys gql-name->kw)
+                                   (cljs-utils/transform-vals scalar-arg-vals->str)))]
     args))
 
 
@@ -457,8 +480,8 @@
                                (let [frag-keys (filter #(= (namespace %) "fragment") (keys x))]
                                  (reduce (fn [acc frag-key]
                                            (-> acc
-                                             (cljs-utils/merge-in (get query-clj frag-key))
-                                             (dissoc frag-key)))
+                                               (cljs-utils/merge-in (get query-clj frag-key))
+                                               (dissoc frag-key)))
                                          x
                                          frag-keys))
                                x))
@@ -469,43 +492,43 @@
   (let [m (partial into {})
         variables (serialize-args variables {:gql-name->kw gql-name->kw})]
     (-> query-ast
-      (visit #js {:leave (fn [node key parent path ancestors]
-                           (condp = (aget node "kind")
-                             "Document" (m (aget node "definitions"))
-                             "Name" (gql-name->kw (aget node "value"))
-                             "Argument" {(aget node "name") (aget node "value")}
-                             "OperationDefinition" {:query
-                                                    (with-meta (aget node "selectionSet")
-                                                               {:operation (keyword (aget node "operation"))})}
-                             "SelectionSet" (let [selections (m (aget node "selections"))
-                                                  id-field-names (get-id-fields-names schema (concat ancestors [parent]))]
-                                              (if (seq id-field-names)
-                                                (with-meta selections {:id-field-names (map gql-name->kw id-field-names)})
-                                                selections))
-                             "Field" (let [selection (aget node "selectionSet")
-                                           metadata (cond-> nil
-                                                      (seq (vec (aget node "arguments")))
-                                                      (assoc :args (m (aget node "arguments")))
+        (visit #js {:leave (fn [node key parent path ancestors]
+                             (condp = (aget node "kind")
+                               "Document" (m (aget node "definitions"))
+                               "Name" (gql-name->kw (aget node "value"))
+                               "Argument" {(aget node "name") (aget node "value")}
+                               "OperationDefinition" {:query
+                                                      (with-meta (aget node "selectionSet")
+                                                        {:operation (keyword (aget node "operation"))})}
+                               "SelectionSet" (let [selections (m (aget node "selections"))
+                                                    id-field-names (get-id-fields-names schema (concat ancestors [parent]))]
+                                                (if (seq id-field-names)
+                                                  (with-meta selections {:id-field-names (map gql-name->kw id-field-names)})
+                                                  selections))
+                               "Field" (let [selection (aget node "selectionSet")
+                                             metadata (cond-> nil
+                                                        (seq (vec (aget node "arguments")))
+                                                        (assoc :args (m (aget node "arguments")))
 
-                                                      (boolean (aget node "alias"))
-                                                      (assoc :name (aget node "name")))]
+                                                        (boolean (aget node "alias"))
+                                                        (assoc :name (aget node "name")))]
 
-                                       {(or (aget node "alias")
-                                            (aget node "name"))
-                                        (with-meta (or selection {}) (merge (meta selection) metadata))})
-                             "IntValue" (js/parseInt (aget node "value"))
-                             "FloatValue" (js/parseFloat (aget node "value"))
-                             "NullValue" (aget node "value")
-                             "StringValue" (aget node "value")
-                             "BooleanValue" (boolean (aget node "value"))
-                             "ListValue" (vec (aget node "values"))
-                             "ObjectValue" (aget node "value")
-                             "EnumValue" (aget node "value")
-                             "Variable" (get variables (aget node "name"))
-                             "FragmentDefinition" {(keyword :fragment (aget node "name")) (aget node "selectionSet")}
-                             "FragmentSpread" {(keyword :fragment (aget node "name")) {}}
-                             js/undefined))})
-      spread-query-fragments)))
+                                         {(or (aget node "alias")
+                                              (aget node "name"))
+                                          (with-meta (or selection {}) (merge (meta selection) metadata))})
+                               "IntValue" (js/parseInt (aget node "value"))
+                               "FloatValue" (js/parseFloat (aget node "value"))
+                               "NullValue" (aget node "value")
+                               "StringValue" (aget node "value")
+                               "BooleanValue" (boolean (aget node "value"))
+                               "ListValue" (vec (aget node "values"))
+                               "ObjectValue" (aget node "value")
+                               "EnumValue" (aget node "value")
+                               "Variable" (get variables (aget node "name"))
+                               "FragmentDefinition" {(keyword :fragment (aget node "name")) (aget node "selectionSet")}
+                               "FragmentSpread" {(keyword :fragment (aget node "name")) {}}
+                               js/undefined))})
+        spread-query-fragments)))
 
 
 (defn create-field-resolver [& [{:keys [:gql-name->kw]
@@ -554,29 +577,29 @@
   (let [query-configs (map #(select-keys % [:query :variables])
                            (js->clj query-configs :keywordize-keys true))]
     (-> (rest query-configs)
-      (->> (reduce (fn [acc {:keys [:query :variables]}]
-                     (let [query-id (str (js/Math.abs (hash [query variables])))
-                           distinct-name (distinct-name-fn query-id)
-                           variable-defs (->> (get-in query [:definitions 0 :variableDefinitions])
-                                           (map (fn [var-def]
-                                                  (update-in var-def [:variable :name :value] distinct-name))))
-                           selections (->> (get-in query [:definitions 0 :selectionSet :selections])
-                                        (map (fn [sel]
-                                               (cond-> sel
-                                                 true
-                                                 (update :arguments (partial map #(rename-arg-variable % distinct-name)))
+        (->> (reduce (fn [acc {:keys [:query :variables]}]
+                       (let [query-id (str (js/Math.abs (hash [query variables])))
+                             distinct-name (distinct-name-fn query-id)
+                             variable-defs (->> (get-in query [:definitions 0 :variableDefinitions])
+                                                (map (fn [var-def]
+                                                       (update-in var-def [:variable :name :value] distinct-name))))
+                             selections (->> (get-in query [:definitions 0 :selectionSet :selections])
+                                             (map (fn [sel]
+                                                    (cond-> sel
+                                                      true
+                                                      (update :arguments (partial map #(rename-arg-variable % distinct-name)))
 
-                                                 (not (:alias sel))
-                                                 (assoc :alias (create-name-node (distinct-name (:value (:name sel)))))))))
-                           variables (into {} (map (fn [[k v]]
-                                                     [(distinct-name (name k)) v])
-                                                   variables))]
-                       (-> acc
-                         (update-in [:query :definitions 0 :selectionSet :selections] concat selections)
-                         (update-in [:query :definitions 0 :variableDefinitions] concat variable-defs)
-                         (update :variables merge variables))))
-                   (first query-configs)))
-      (update :query clj->js))))
+                                                      (not (:alias sel))
+                                                      (assoc :alias (create-name-node (distinct-name (:value (:name sel)))))))))
+                             variables (into {} (map (fn [[k v]]
+                                                       [(distinct-name (name k)) v])
+                                                     variables))]
+                         (-> acc
+                             (update-in [:query :definitions 0 :selectionSet :selections] concat selections)
+                             (update-in [:query :definitions 0 :variableDefinitions] concat variable-defs)
+                             (update :variables merge variables))))
+                     (first query-configs)))
+        (update :query clj->js))))
 
 
 (defn create-dataloader [{:keys [:on-success :on-error :on-request :on-response :fetch-event] :as opts}]
@@ -624,18 +647,18 @@
 
 (defn apply-query-middlewares [middlewares {:keys [:query :variables] :as opts}]
   (let [results (doall
-                  (reduce (fn [acc middleware]
-                            (let [{:keys [:query :variables :response]} ((:fn middleware) (merge opts acc))]
-                              {:query (or query (:query acc))
-                               :queries (if query
-                                          (conj (:queries acc) query)
-                                          (:queries acc))
-                               :variables (or variables (:variables acc))
-                               :responses (if response
-                                            (conj (:responses acc) response)
-                                            (:responses acc))}))
-                          {:query query :variables variables :queries [query] :responses []}
-                          middlewares))]
+                 (reduce (fn [acc middleware]
+                           (let [{:keys [:query :variables :response]} ((:fn middleware) (merge opts acc))]
+                             {:query (or query (:query acc))
+                              :queries (if query
+                                         (conj (:queries acc) query)
+                                         (:queries acc))
+                              :variables (or variables (:variables acc))
+                              :responses (if response
+                                           (conj (:responses acc) response)
+                                           (:responses acc))}))
+                         {:query query :variables variables :queries [query] :responses []}
+                         middlewares))]
     results))
 
 
@@ -654,10 +677,10 @@
                                                               (seq (aget node "variableDefinitions")))
                                                        (let [node (clj->js (js->clj node))
                                                              new-defs (remove
-                                                                        (fn [def]
-                                                                          (or (not (aget def "variable"))
-                                                                              (not (contains? @used-variables (aget def "variable" "name" "value")))))
-                                                                        (aget node "variableDefinitions"))]
+                                                                       (fn [def]
+                                                                         (or (not (aget def "variable"))
+                                                                             (not (contains? @used-variables (aget def "variable" "name" "value")))))
+                                                                       (aget node "variableDefinitions"))]
                                                          (aset node "variableDefinitions" (clj->js new-defs))
                                                          node)
                                                        js/undefined))}

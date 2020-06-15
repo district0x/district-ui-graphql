@@ -1,6 +1,7 @@
 (ns scratch
   (:require
-   [com.rpl.specter :as $ :refer [select transform setval]]))
+   [com.rpl.specter :as $ :refer [select transform setval]]
+   [clojure.walk :as walk]))
 
 
 (def data
@@ -14,6 +15,30 @@
    {:type "data"
     :name nil
     :timestamp 2234532}])
+
+(def data2
+  {:search-users
+   {:items
+    [{:user/params
+      [{:__typename "Parameter",
+        :param/db "b",
+        :param/other-key "kek",
+        :param/id "key1"}],
+      :__typename "User",
+      :user/address "123",
+      :user/active? true,
+      :user/id "123",
+      :user/status "user.status/blocked",
+      :user/favorite-numbers [1 2]}],
+    :__typename "UserList"},
+   :other-users
+   {:items
+    [{:__typename "User",
+      :user/status "user.status/blocked",
+      :user/active? true,
+      :user/address "456", 
+      :user/id "456"}], 
+    :__typename "UserList"}})
 
 
 (select [0 :type] data)
@@ -49,6 +74,7 @@
 
 
 (select [PATHWALKER map?] data)
+(select [PATHWALKER map?] data2)
 (select [PATHWALKER map?] [{:a true} 123 true])
 (println (select PATHWALKER [{:a {:b {:c [1 2 3]}}}]))
 (println (select [PATHWALKER map?] [{:test? true} 123 true [1 2 3] {:children [1 2 {:foo :bar}]}]))
@@ -63,7 +89,7 @@
 
 (def test-data {:children [{:children [{:children [{:children []}]}]}]})
 (select [PATHWALKER map?] test-data)
-(transform [PATHWALKER map?] (partial tag-max-depth 2) test-data)
+(transform [PATHWALKER map?] (partial tag-max-depth 2) data2)
 
 (transform [PATHWALKER #(and (map? %) (contains? % :timestamp))]
   (fn [& args]
@@ -81,80 +107,6 @@
    ($/cond-path
     ($/pred afn) $/STAY
     coll?        [$/ALL path])))
-
-
-(defn non-empty-keys
-  "Given a map return the set of empty keys.
-  All this are considered empty keys
-  {:a nil
-   :b []
-   :c [nil nil nil]}"
-  [m]
-  (set (keep (fn [[k v]]
-               (when-not (or (nil? v)
-                             (and (sequential? v)
-                                  (empty? (remove nil? v))))
-                 k))
-             m)))
-
-#_(non-empty-keys
-   {:a nil
-    :b []
-    :c [nil nil nil]
-    :__typename "test"})
-
-
-(defn empty-with-nils?
-  "Is the sequence empty if you remove the nil elements?"
-  [coll]
-  (->> coll (remove nil?) empty?))
-
-
-(defn remove-empty-keys
-  "Removes all keys from the map if:
-
-   - the value is nil
-
-   - the value is a sequential collection, and is empty if you remove the nil elements."
-  [m]
-  (setval [$/MAP-VALS ($/if-path sequential? empty-with-nils? nil?)] $/NONE m))
-
-
-(defn non-empty-keys
-  "Retrieve the list of keys with values that are 'non-empty'.
-  
-  # Notes
-  
-  - Please refer to `remove-empty-keys`."
-  [m]
-  (-> m remove-empty-keys keys set))
-
-
-#_(remove-empty-keys {:a nil
-                      :b []
-                      :c [nil nil nil]
-                      :__typename "test"})
-
-
-(defn- ensure-count
-  "Ensures the sequence of map values `map-seq` has `n` values by
-  repeating the first map sequence element to satisfy `n` elements in
-  the sequence.
-
-  # Notes
-
-  - Preserves the key `:__typename` in the first element when repeating"
-  [map-seq n]
-  (let [num-offset (max (- n (count map-seq)) 0)
-        repeat-value (if-let [typename (-> map-seq first :__typename)]
-                       {:__typename typename}
-                       {})
-        repeat-seq (repeat num-offset repeat-value)]
-    ;; Append `repeat-seq` to the end of the `map-seq`
-    (setval [$/END] map-seq repeat-seq)))
-
-
-#_(ensure-count [{:a 123 :__typename "Category"} {}] 4)
 
 
 (letfn [(merge-in-colls* [xs ys]
@@ -178,5 +130,46 @@
 
 #_(merge-in-colls
    [{:a [{} {} {}]}]
-   [{:a [{} {} {}]}]
-   [{:a [{} {} {}]}])
+   [{:a [{} {} {:a :value}]}]
+   [{:a [{} {} {:b :value2}]}])
+
+
+;; Right
+{:search-users
+ {{:user/registered-after 1539129600000, :user/age 100000000000}
+  {:items
+   [{:user/registered-on 1525478400000,
+     :__typename "User",
+     :user/favorite-numbers [1 2 3],
+     :user/id "1",
+     :user/active? true,
+     :user/status "user.status/active",
+     :user/params
+     {{:param/other-key "kek"}
+      [{:__typename "Parameter",
+        :param/db "b",
+        :param/other-key "kek",
+        :param/id "123"}]},
+     :user/age 100000000000,
+     :user/address "Street 1"}],
+   :__typename "UserList", 
+   :total-count 1}}}
+
+;; Wrong
+{:search-users
+ {:items
+  [{:user/registered-on 1525478400000,
+    :__typename "User",
+    :user/favorite-numbers [1 2 3],
+    :user/id "1",
+    :user/active? true,
+    :user/status "user.status/active",
+    :user/params
+    [{:__typename "Parameter",
+      :param/db "b",
+      :param/other-key "kek",
+      :param/id "123"}],
+    :user/age 100000000000,
+    :user/address "Street 1"}], 
+  :__typename "UserList", 
+  :total-count 1}}
