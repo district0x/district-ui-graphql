@@ -175,124 +175,124 @@
                              (is (= "Street 1" (:user/address @(subscribe [::subs/entity :user 1]))))
                              (is (= "b" (:param/db @(subscribe [::subs/entity :parameter {:param/id 123 :param/db "b"}])))))))))))
 
-#_(deftest auth-token-test
-    (let [request (atom nil)]
-      (run-test-async
-       (-> (mount/with-args {:graphql (assoc-in mount-args [:fetch-opts :customFetch] (fn [_ req]
-                                                                                        (reset! request req)
-                                                                                        (js/Promise.resolve
-                                                                                         (js/Response. #js {} (clj->js {:status 200})))))})
-           (mount/start))
-
-       (testing "Authorization token should be set"
-
-         (dispatch [:district.ui.graphql.events/set-authorization-token "the-token"])
-
-         (let [query1 (subscribe [::subs/query {:queries [[:search-users
-                                                           {:user/registered-after (t/date-time 2018 10 10)
-                                                            :user/age (bn/number "10e10")}
-                                                           [:total-count]]]}])]
-           (wait-for [::events/set-query-loading]
-                     (is (true? (= "Bearer the-token"
-                                   (.. @request -headers -authorization))))))))))
-
-
-#_(deftest query-batching
+(deftest auth-token-test
+  (let [request (atom nil)]
     (run-test-async
-     (-> (mount/with-args {:graphql mount-args})
+     (-> (mount/with-args {:graphql (assoc-in mount-args [:fetch-opts :customFetch] (fn [_ req]
+                                                                                      (reset! request req)
+                                                                                      (js/Promise.resolve
+                                                                                       (js/Response. #js {} (clj->js {:status 200})))))})
          (mount/start))
 
-     (set-response! {:params (fn [{:keys [:db :keys]}]
-                               (for [key keys]
-                                 {:param/id key
-                                  :param/db db
-                                  :param/key key
-                                  :param/other-key "11"
-                                  :param/creator (fn []
-                                                   {:user/id 1
-                                                    :user/active? true})}))})
+     (testing "Authorization token should be set"
 
-     (let [query2 (subscribe [::subs/query
-                              {:queries [{:query/data [:params {:db "a" :keys [:abc/key1 :key2]}
-                                                       [:param/db
-                                                        :param/key
-                                                        [:param/creator [:user/active?]]]]
-                                          :query/alias :my-params}
-                                         [:params {:db "b" :keys [:key3]}
-                                          [:param/db :param/other-key]]]}
-                              {:consider-preprocessing-as-loading? false}])
-           query3 (subscribe [::subs/query
-                              {:queries [[:params {:db "b" :keys [:key3]}
-                                          [:param/db
-                                           {:field/data [:param/key]
-                                            :field/alias :param/my-key}]]]}])]
+       (dispatch [:district.ui.graphql.events/set-authorization-token "the-token"])
 
-       (is (true? (:graphql/preprocessing? @query2)))
-       (is (false? (:graphql/loading? @query2)))
-       (is (true? (:graphql/preprocessing? @query3)))
-       (is (true? (:graphql/loading? @query3)))
+       (let [query1 (subscribe [::subs/query {:queries [[:search-users
+                                                         {:user/registered-after (t/date-time 2018 10 10)
+                                                          :user/age (bn/number "10e10")}
+                                                         [:total-count]]]}])]
+         (wait-for [::events/set-query-loading]
+                   (is (true? (= "Bearer the-token"
+                                 (.. @request -headers -authorization))))))))))
+
+
+(deftest query-batching
+  (run-test-async
+   (-> (mount/with-args {:graphql mount-args})
+       (mount/start))
+
+   (set-response! {:params (fn [{:keys [:db :keys]}]
+                             (for [key keys]
+                               {:param/id key
+                                :param/db db
+                                :param/key key
+                                :param/other-key "11"
+                                :param/creator (fn []
+                                                 {:user/id 1
+                                                  :user/active? true})}))})
+
+   (let [query2 (subscribe [::subs/query
+                            {:queries [{:query/data [:params {:db "a" :keys [:abc/key1 :key2]}
+                                                     [:param/db
+                                                      :param/key
+                                                      [:param/creator [:user/active?]]]]
+                                        :query/alias :my-params}
+                                       [:params {:db "b" :keys [:key3]}
+                                        [:param/db :param/other-key]]]}
+                            {:consider-preprocessing-as-loading? false}])
+         query3 (subscribe [::subs/query
+                            {:queries [[:params {:db "b" :keys [:key3]}
+                                        [:param/db
+                                         {:field/data [:param/key]
+                                          :field/alias :param/my-key}]]]}])]
+
+     (is (true? (:graphql/preprocessing? @query2)))
+     (is (false? (:graphql/loading? @query2)))
+     (is (true? (:graphql/preprocessing? @query3)))
+     (is (true? (:graphql/loading? @query3)))
+     (wait-for [::events/normalize-response]
+               (is (nil? (:graphql/errors @query2)))
+               (is (nil? (:graphql/errors @query3)))
+               (let [{:keys [:my-params :params]} @query2]
+
+                 (is (= my-params [{:param/db "a" :param/key :abc/key1 :param/creator {:user/active? true}}
+                                   {:param/db "a" :param/key :key2 :param/creator {:user/active? true}}]))
+                 (is (= params [{:param/db "b" :param/other-key "11"}]))
+                 (is (= (:params @query3) [{:param/db "b" :param/my-key :key3}]))
+
+                 (is (= "a" (:param/db @(subscribe [::subs/entity :parameter {:param/id :abc/key1 :param/db "a"}]))))
+                 (is (= "a" (:param/db @(subscribe [::subs/entity :parameter {:param/id :key2 :param/db "a"}]))))
+                 (is (= "b" (:param/db @(subscribe [::subs/entity :parameter {:param/id :key3 :param/db "b"}]))))
+                 (is (= true (:user/active? @(subscribe [::subs/entity :user 1])))))))))
+
+
+(deftest query-variables
+  (run-test-async
+   (-> (mount/with-args {:graphql mount-args})
+       (mount/start))
+
+   (set-response! {:search-users (fn [{:keys [:some/param]}]
+                                   {:items (constantly
+                                            [{:user/id param
+                                              :user/address param}])})})
+
+   (testing "Correctly merges queries, even with same variable names"
+     (let [query1 (subscribe [::subs/query
+                              {:operation {:operation/type :query
+                                           :operation/name :some-query}
+                               :queries [[:search-users
+                                          {:some/param :$a}
+                                          [[:items [:user/address]]]]]
+                               :variables [{:variable/name :$a
+                                            :variable/type :String!}]}
+                              {:variables {:a "123456"}}])
+
+           query2 (subscribe [::subs/query
+                              {:operation {:operation/type :query
+                                           :operation/name :some-other-query}
+                               :queries [[:search-users
+                                          {:some/param :$a
+                                           :user/registered-after :$date
+                                           :user/age :$age}
+                                          [[:items [:user/address]]]]]
+                               :variables [{:variable/name :$a
+                                            :variable/type :String!}
+                                           {:variable/name :$date
+                                            :variable/type :Date}
+                                           {:variable/name :$age
+                                            :variable/type :BigNumber}]}
+                              {:variables {:a "abcd"
+                                           :date (t/date-time 2018 10 10)
+                                           :age (bn/number "10e10")}}])]
+
        (wait-for [::events/normalize-response]
+                 (is (nil? (:graphql/errors @query1)))
                  (is (nil? (:graphql/errors @query2)))
-                 (is (nil? (:graphql/errors @query3)))
-                 (let [{:keys [:my-params :params]} @query2]
-
-                   (is (= my-params [{:param/db "a" :param/key :abc/key1 :param/creator {:user/active? true}}
-                                     {:param/db "a" :param/key :key2 :param/creator {:user/active? true}}]))
-                   (is (= params [{:param/db "b" :param/other-key "11"}]))
-                   (is (= (:params @query3) [{:param/db "b" :param/my-key :key3}]))
-
-                   (is (= "a" (:param/db @(subscribe [::subs/entity :parameter {:param/id :abc/key1 :param/db "a"}]))))
-                   (is (= "a" (:param/db @(subscribe [::subs/entity :parameter {:param/id :key2 :param/db "a"}]))))
-                   (is (= "b" (:param/db @(subscribe [::subs/entity :parameter {:param/id :key3 :param/db "b"}]))))
-                   (is (= true (:user/active? @(subscribe [::subs/entity :user 1])))))))))
-
-
-#_(deftest query-variables
-    (run-test-async
-     (-> (mount/with-args {:graphql mount-args})
-         (mount/start))
-
-     (set-response! {:search-users (fn [{:keys [:some/param]}]
-                                     {:items (constantly
-                                              [{:user/id param
-                                                :user/address param}])})})
-
-     (testing "Correctly merges queries, even with same variable names"
-       (let [query1 (subscribe [::subs/query
-                                {:operation {:operation/type :query
-                                             :operation/name :some-query}
-                                 :queries [[:search-users
-                                            {:some/param :$a}
-                                            [[:items [:user/address]]]]]
-                                 :variables [{:variable/name :$a
-                                              :variable/type :String!}]}
-                                {:variables {:a "123456"}}])
-
-             query2 (subscribe [::subs/query
-                                {:operation {:operation/type :query
-                                             :operation/name :some-other-query}
-                                 :queries [[:search-users
-                                            {:some/param :$a
-                                             :user/registered-after :$date
-                                             :user/age :$age}
-                                            [[:items [:user/address]]]]]
-                                 :variables [{:variable/name :$a
-                                              :variable/type :String!}
-                                             {:variable/name :$date
-                                              :variable/type :Date}
-                                             {:variable/name :$age
-                                              :variable/type :BigNumber}]}
-                                {:variables {:a "abcd"
-                                             :date (t/date-time 2018 10 10)
-                                             :age (bn/number "10e10")}}])]
-
-         (wait-for [::events/normalize-response]
-                   (is (nil? (:graphql/errors @query1)))
-                   (is (nil? (:graphql/errors @query2)))
-                   (is (= "123456" (get-in @query1 [:search-users :items 0 :user/address])))
-                   (is (= "abcd" (get-in @query2 [:search-users :items 0 :user/address])))
-                   (is (= "123456" (:user/address @(subscribe [::subs/entity :user "123456"]))))
-                   (is (= "abcd" (:user/address @(subscribe [::subs/entity :user "abcd"])))))))))
+                 (is (= "123456" (get-in @query1 [:search-users :items 0 :user/address])))
+                 (is (= "abcd" (get-in @query2 [:search-users :items 0 :user/address])))
+                 (is (= "123456" (:user/address @(subscribe [::subs/entity :user "123456"]))))
+                 (is (= "abcd" (:user/address @(subscribe [::subs/entity :user "abcd"])))))))))
 
 
 #_(deftest query-fragments

@@ -68,51 +68,54 @@
 
 
 (def PATHWALKER
+  ($/recursive-path
+   [] path
+   ($/cond-path
+    map?           ($/stay-then-continue [INDEXED path])
+    vector?        ($/stay-then-continue [INDEXED-SEQ path])
+    $/STAY         $/STAY)))
+
+
+(def MAP-PATHWALKER
   "Walks over the data structure, producing a navigation path of
   collected values of each value traversed.
 
-  # Examples
-  (require '[com.rpl.specter :refer [select transform]])
+  # Notes
 
-  ;; Select all paths
-  (select PATHWALKER [{:a {:b {:c [1 2 3]}}}])
-
-  ;; [[{:a {:b {:c [1 2 3]}}}]
-  ;;  [0 {:a {:b {:c [1 2 3]}}}]
-  ;;  [0 :a {:b {:c [1 2 3]}}]
-  ;;  [0 :a :b {:c [1 2 3]}]
-  ;;  [0 :a :b :c [1 2 3]]
-  ;;  [0 :a :b :c 0 1]
-  ;;  [0 :a :b :c 1 2]
-  ;;  [0 :a :b :c 2 3]]
-
-  ;; Select only paths that are maps
-  (select [PATHWALKER map?] [{:test? true} 123 true [1 2 3] {:children [1 2 {:foo :bar}]}])
-
-  ;; [[0 {:test? true}]
-  ;;  [4 {:children [1 2 {:foo :bar}]}]
-  ;;  [4 :children 2 {:foo :bar}]]
-
-  ;; Transform Structure, such that maps at a certain depth are tagged :depth --> true
- 
-
-  (transform [PATHWALKER map?]
-    (fn [& args]
-      (let [node (last args)
-            path (butlast args)
-            path-depth (count path)]
-        (if (>= path-depth 2) {} node)))
-    {:children [{:children [{:children [{:children []}]}]}]})
- 
-  ;; 
-
+  - Sequences are ignored when producing a path. This is optimal for our given scenarios.
   "
   ($/recursive-path
    [] path
    ($/cond-path
     map?           ($/continue-then-stay [INDEXED path])
-    vector?        ($/continue-then-stay [INDEXED-SEQ path])
-    $/STAY         $/STAY)))
+    coll?          [$/ALL path])))
+
+
+(def map-with-key-walker
+  "Recursively post walk the tree, and stay at map nodes that contain the key `k`."
+  ($/recursive-path
+   [k] path
+   ($/cond-path
+    #(and (map? %) (contains? % k)) ($/continue-then-stay [$/MAP-VALS path])
+    map?                            [$/MAP-VALS path]
+    coll?                           [$/ALL path])))
+
+
+(def ALIAS-WALKER (map-with-key-walker :__alias))
+
+
+(def MALFORMED-ALIAS
+  "Navigates through the alias replacements that can be merged."
+  ($/recursive-path
+   [] path
+   ($/cond-path
+    #(and (coll? %)
+          (seq %)
+          (-> % first map?)
+          (-> % first :__typename not))
+    ($/continue-then-stay [$/ALL path])
+    map?   [$/MAP-VALS path]
+    coll?  [$/ALL path])))
 
 
 (defn- ancestors->query-path
@@ -148,6 +151,7 @@
     (if (aget object key)
       (recur (aget object key))
       object)))
+
 
 (defn- query-path->graphql-type
   "Retrieves the GraphQL Type Object from the given GraphQLSchema
@@ -344,39 +348,103 @@
                            (catch :default _
                              node)))
                        (contextual/contextualize data))]
-    (println "Result")
+    (println "Old Result")
     (pprint result)
     result))
+
+
+(defn graphql-map? [m]
+  (and (map? m) (contains? m :__typename)))
+  
+
+(defn apply-aliases-transform
+  [query & args]
+  (let [node (last args)
+        path (butlast args)
+        meta-data (-> query (get-in path) meta)]
+    (if (:args meta-data)
+      (assoc node :__alias {:args (:args meta-data)
+                            :name (:name meta-data)})
+      node)))
+
+
+(defn apply-alias-data
+  "Transfers the `query-clj` metadata pertaining to aliases into the
+  graphql result `data` in the form of the key `:__alias`."
+  [data {:keys [:query] :as query-clj}]
+  (let [result (transform MAP-PATHWALKER (partial apply-aliases-transform query) data)]
+    result))
+
+
+(defn malformed-alias-transform
+  "Converts the malformed alias into a map of grouped alias collections."
+  [node]
+  (->> node
+       (transform [$/ALL $/MAP-VALS] vector)
+       (apply merge-with into)))
+
+
+(defn graphql-alias-map?
+  [m]
+  (and (map? m)
+       (contains? m :__alias)
+       (-> m :__alias :name)))
+
+
+(def ALIASED-PATHWALKER
+  [PATHWALKER graphql-alias-map?])
+
+
+(defn construct-path-alias-playbook
+  "Constructing a play book of deltas to perform on the original structure.
+
+   :old-path key is the original path.
+
+   :new-path key is the new path
+
+   :node is the element that needs to be moved to the new-path from the old-path.
+   "
+  [args]
+  (let [node (last args)
+        path (butlast args)
+        alias-name (-> node :__alias :name)]
+    {:node node
+     :old-path path
+     :new-path (concat [alias-name] (rest path))}))
+
+
+(defn apply-path-alias-playbook
+  [data {:keys [node old-path new-path]}]
+  (let [new-path (-> new-path butlast vec) ;; remove the vec index
+        result
+        (-> data
+            (update-in new-path vec) ;; Make sure path exists
+            (update-in new-path conj node)
+          
+            ;; TODO: Remove old path
+            )]
+    result))
+
+
+(defn resolve-alias-data
+  "Turns the "
+  [data]
+  (->> data
+       (select ALIASED-PATHWALKER)
+       (map construct-path-alias-playbook)
+       (reduce apply-path-alias-playbook data)))
 
 
 (defn *response-replace-aliases
   [data {:keys [:query] :as query-clj}]
   (let [result
-        (transform [PATHWALKER map?]
-                   (fn [& args]
-                     (let [node (last args)
-                           path (-> args butlast vec)
-                           result (reduce
-                                   (fn [acc [key value]]
-                                     (let [query-path (->> (conj path key) (remove number?))
-                                           _ (println "Query Path" query-path)
-                                           {:keys [:name :args] :as query-metadata} (-> (get-in query query-path) meta)
-                                           _ (println "Meta Query")
-                                           _ (pprint query-metadata)
-                                           result-path (remove nil? [(or name key) args])
-                                           _ (println "Result Path" result-path)]
-                                       (assoc-in acc result-path value)))
-                                   {}
-                                   node)]
-                       (println "Before")
-                       (pprint node)
-                       (println "After")
-                       (pprint result)
-                       result))
-                   data)]
-    (println "Result")
-    (pprint data)
-    data))
+        (->> (apply-alias-data data query-clj)
+             (transform ALIAS-WALKER (fn [node] {(-> node :__alias :args) node}))
+             (transform MALFORMED-ALIAS malformed-alias-transform)
+             resolve-alias-data)]
+    (println "Final Result")
+    (pprint result)
+    result))
 
 
 (defn query-clj-replace-aliases [query-clj]
