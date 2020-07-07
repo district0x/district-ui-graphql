@@ -5,20 +5,20 @@
             :url "http://www.eclipse.org/legal/epl-v10.html"}
 
   :dependencies [[district0x/bignumber "1.0.3"]
-                 [camel-snake-kebab "0.4.0"]
+                 [camel-snake-kebab "0.4.1"]
                  [cljsjs/apollo-fetch "0.7.0-0"]
                  [cljsjs/dataloader "1.4.0-0"]
                  [cljsjs/graphql "0.13.1-0"]
                  [com.andrewmcveigh/cljs-time "0.5.2"]
-                 [day8.re-frame/forward-events-fx "0.0.5"]
+                 [day8.re-frame/forward-events-fx "0.0.6"]
                  [day8.re-frame/http-fx "0.1.6"]
-                 [district0x/district-cljs-utils "1.0.3"]
-                 [district0x/district-graphql-utils "1.0.6"]
+                 [district0x/district-cljs-utils "1.0.4"]
+                 [district0x/district-graphql-utils "1.0.10"]
                  [district0x/graphql-query "1.0.4"]
-                 [madvas/contextual "0.1.0"]
-                 [mount "0.1.11"]
-                 [org.clojure/clojurescript "1.10.238"]
-                 [re-frame "0.10.2"]]
+                 [district0x/contextual "0.2.0"]
+                 [mount "0.1.16"]
+                 [org.clojure/clojurescript "1.10.773"]
+                 [re-frame "0.12.0"]]
 
   :doo {:paths {:karma "./node_modules/karma/bin/karma"}
         :build "tests"
@@ -37,6 +37,7 @@
                                   [org.clojure/tools.nrepl "0.2.13"]
                                   [print-foo-cljs "2.0.3"]]
                    :plugins [[lein-cljsbuild "1.1.7"]
+                             [lein-ancient "0.6.15"]
                              [lein-doo "0.1.10"]
                              [lein-npm "0.6.2"]]}}
 
