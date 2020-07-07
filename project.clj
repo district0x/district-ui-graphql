@@ -43,14 +43,13 @@
 
   :deploy-repositories [["snapshots" {:url "https://clojars.org/repo"
                                       :username :env/clojars_username
-                                      :password :env/clojars_password
+                                      :password :env/clojars_token
                                       :sign-releases false}]
                         ["releases"  {:url "https://clojars.org/repo"
                                       :username :env/clojars_username
-                                      :password :env/clojars_password
+                                      :password :env/clojars_token
                                       :sign-releases false}]]
-
-  :release-tasks [#_["vcs" "assert-committed"]
+  :release-tasks [["vcs" "assert-committed"]
                   ["change" "version" "leiningen.release/bump-version" "release"]
                   ["deploy"]]
 
