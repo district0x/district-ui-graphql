@@ -49,6 +49,7 @@
                   :gql-name->kw graphql-utils/gql-name->kw
                   :fetcher fetcher
                   :dataloader dataloader
+                  :url url
                   :schema (utils/build-schema schema)
                   :query-middlewares (concat [(utils/create-middleware :id-fields id-fields-middleware)
                                               (utils/create-middleware :typenames typenames-middleware)]
