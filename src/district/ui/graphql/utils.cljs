@@ -39,28 +39,28 @@
         (graphql-utils/add-bignumber-type))))
 
 
-(defn- ancestors->query-path [ancestors & [{:keys [:use-aliases? :gql-name->kw]
-                                            :or {gql-name->kw identity}}]]
+(defn ancestors->query-path [ancestors & [{:keys [:use-aliases? :gql-name->kw]
+                                           :or {gql-name->kw identity}}]]
   (->> ancestors
-    (remove (fn [node]
-              (or (not node)
-                  (= (aget node "kind") "OperationDefinition"))))
-    (map (fn [node]
-           (cond
-             (and use-aliases?
-                  (aget node "alias"))
-             (gql-name->kw (aget node "alias" "value"))
+       (remove (fn [node]
+                 (or (not node)
+                     (= (aget node "kind") "OperationDefinition"))))
+       (map (fn [node]
+              (cond
+                (and use-aliases?
+                     (aget node "alias"))
+                (gql-name->kw (aget node "alias" "value"))
 
-             (= (aget node "kind") "FragmentDefinition")
-             {:typename (gql-name->kw (aget node "typeCondition" "name" "value"))
-              :fragment (keyword (gql-name->kw (aget node "name" "value")))}
+                (= (aget node "kind") "FragmentDefinition")
+                {:typename (gql-name->kw (aget node "typeCondition" "name" "value"))
+                 :fragment (keyword (gql-name->kw (aget node "name" "value")))}
 
-             (aget node "name")
-             (gql-name->kw (aget node "name" "value"))
+                (aget node "name")
+                (gql-name->kw (aget node "name" "value"))
 
-             :else nil)))
-    (remove nil?)
-    seq))
+                :else nil)))
+       (remove nil?)
+       seq))
 
 
 (defn- js-object-climb
