@@ -30,30 +30,32 @@
     (queries/set-authorization-token db token)))
 
 (reg-event-fx
-  ::start
-  interceptors
-  (fn [{:keys [:db]} [{:keys [:schema :url :query-middlewares :fetch-opts] :as opts}]]
-    (let [fetcher (when url
-                    (doto (js/apolloFetch.createApolloFetch (clj->js (merge {:uri url} fetch-opts)))
-                      (.use add-token-fetcher-middleware)))
-          dataloader (utils/create-dataloader {:fetch-event [::fetch]
-                                               :on-success [::normalize-response]
-                                               :on-error [::query-error*]
-                                               :on-response [::query-response*]
-                                               :on-request [::query-request*]})]
-
-      {:db (-> db
-             (queries/merge-config
+ ::start
+ interceptors
+ (fn [{:keys [:db]} [{:keys [:schema :url :query-middlewares :fetch-opts] :as opts}]]
+   (let [fetcher (when url
+                   (let [af (js/apolloFetch.createApolloFetch (clj->js (merge {:uri url} fetch-opts)))]
+                     (.use af add-token-fetcher-middleware)))
+         dataloader (utils/create-dataloader {:fetch-event [::fetch]
+                                              :on-success [::normalize-response]
+                                              :on-error [::query-error*]
+                                              :on-response [::query-response*]
+                                              :on-request [::query-request*]})
+         sch (utils/build-schema schema)
+         mids (concat [(utils/create-middleware :id-fields id-fields-middleware)
+                       (utils/create-middleware :typenames typenames-middleware)]
+                      query-middlewares)]
+     {:db (-> db
+              (queries/merge-config
                (merge
-                 {:kw->gql-name graphql-utils/kw->gql-name
-                  :gql-name->kw graphql-utils/gql-name->kw
-                  :fetcher fetcher
-                  :dataloader dataloader
-                  :schema (utils/build-schema schema)
-                  :query-middlewares (concat [(utils/create-middleware :id-fields id-fields-middleware)
-                                              (utils/create-middleware :typenames typenames-middleware)]
-                                             query-middlewares)}
-                 (select-keys opts [:kw->gql-name :gql-name->kw]))))})))
+                {:kw->gql-name graphql-utils/kw->gql-name
+                 :gql-name->kw graphql-utils/gql-name->kw
+                 :fetcher fetcher
+                 :dataloader dataloader
+                 :url url
+                 :schema sch
+                 :query-middlewares mids}
+                (select-keys opts [:kw->gql-name :gql-name->kw]))))})))
 
 
 (reg-event-fx
@@ -65,21 +67,21 @@
                                         opts)]
 
       (merge
-        {::effects/enqueue-query
-         {:schema (queries/config db :schema)
-          :fetcher (queries/config db :fetcher)
-          :dataloader (queries/config db :dataloader)
-          :query query
-          :query-str query-str
-          :variables variables}}
-        {:db (cond-> db
-               true (queries/assoc-query-preprocessing query-str true)
-               id (queries/add-id-query id query-str variables))}
+       {::effects/enqueue-query
+        {:schema (queries/config db :schema)
+         :fetcher (queries/config db :fetcher)
+         :dataloader (queries/config db :dataloader)
+         :query query
+         :query-str query-str
+         :variables variables}}
+       {:db (cond-> db
+              true (queries/assoc-query-preprocessing query-str true)
+              id (queries/add-id-query id query-str variables))}
 
-        (when (and refetch-on refetch-id)
-          {:forward-events {:register (str queries/db-key refetch-id)
-                            :events refetch-on
-                            :dispatch-to [::query (dissoc opts :refetch-on :refetch-id)]}})))))
+       (when (and refetch-on refetch-id)
+         {:forward-events {:register (str queries/db-key refetch-id)
+                           :events refetch-on
+                           :dispatch-to [::query (dissoc opts :refetch-on :refetch-id)]}})))))
 
 
 (reg-event-fx

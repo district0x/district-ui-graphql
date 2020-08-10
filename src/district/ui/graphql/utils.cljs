@@ -31,11 +31,12 @@
 
 
 (defn build-schema [schema]
-  (cond-> schema
-    (string? schema) gql-build-schema
-    true (graphql-utils/add-keyword-type {:disable-serialize? true})
-    true (graphql-utils/add-date-type {:disable-serialize? true})
-    true (graphql-utils/add-bignumber-type)))
+  (let [sch (gql-build-schema schema)]
+    (js/console.log "Schema" sch)
+    (-> sch
+        (graphql-utils/add-keyword-type {:disable-serialize? true})
+        (graphql-utils/add-date-type {:disable-serialize? true})
+        (graphql-utils/add-bignumber-type))))
 
 
 (defn- ancestors->query-path [ancestors & [{:keys [:use-aliases? :gql-name->kw]

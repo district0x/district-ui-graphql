@@ -49,13 +49,19 @@
                                                  (utils/merge-in-colls acc res)))
                                              {}
                                              resps)
-                                     (utils/remove-empty-typename-paths))] 
+                                     (utils/remove-empty-typename-paths))]
                          (when on-response
                            (dispatch (vec (concat on-response [res req-opts]))))
                          (if (empty? (:errors res))
                            (when on-success
                              (dispatch (vec (concat on-success [(:data res) req-opts]))))
                            (when on-error
+                             (js/console.error "::FETCH" (clj->js (:errors res)))
+                             (let [ex (clj->js (first (:errors res)))]
+                               (println "Something went wrong when routing" ex)
+                               (println "Stacktrace" (.-stack ex))
+
+                              (js/console.error "::FETCH ERR" e))
                              (dispatch (vec (concat on-error [(:errors res) req-opts]))))))))
               (fn [error]
                 (let [error {:message (ex-message error)}]
