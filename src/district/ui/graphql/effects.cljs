@@ -45,6 +45,7 @@
                        (let [res (-> (reduce (fn [acc res]
                                                (let [res (-> (graphql-utils/js->clj-response res {:gql-name->kw gql-name->kw})
                                                              utils/remove-nil-vals)]
+                                                 (println "MERGING" res)
                                                  (utils/merge-in-colls acc res)))
                                              {}
                                              resps)
