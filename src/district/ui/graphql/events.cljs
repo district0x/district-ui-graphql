@@ -41,7 +41,9 @@
                                               :on-error [::query-error*]
                                               :on-response [::query-response*]
                                               :on-request [::query-request*]})
+         _ (js/console.log "BEFORE")
          sch (utils/build-schema schema)
+         _ (js/console.log "!!!!!!!!!!!!<<<<<<<<<<<<<<qqq" (gobj/get (gobj/get (gobj/get sch "_typeMap") "Date") "parseLiteral"))
          mids (concat [(utils/create-middleware :id-fields id-fields-middleware)
                        (utils/create-middleware :typenames typenames-middleware)]
                       query-middlewares)]

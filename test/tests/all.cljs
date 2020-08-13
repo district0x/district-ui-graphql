@@ -5,7 +5,8 @@
     [cljs.test :refer [deftest is testing run-tests async use-fixtures]]
     [day8.re-frame.test :refer [run-test-async run-test-sync wait-for]]
     [district.graphql-utils :as graphql-utils]
-    [district.ui.graphql.utils :refer [build-schema]]
+    ;; THIS BROKE EVERYTHING
+    #_[district.ui.graphql.utils :refer [build-schema]]
     [district.ui.graphql.events :as events]
     [district.ui.graphql.middleware.resolver :refer [create-resolver-middleware]]
     [district.ui.graphql.subs :as subs]
@@ -99,8 +100,8 @@
   (fn [{:keys [:params :on-success]}]
     (println (graphql-utils/clj->js-root-value @response-root-value))
     (let [promise (gql (-> (build-schema @response-schema)
-                           (graphql-utils/add-keyword-type {:disable-serialize? true})
-                           (graphql-utils/add-date-type    {:disable-serialize? true})
+                           (graphql-utils/add-keyword-type #_{:disable-serialize? true})
+                           (graphql-utils/add-date-type    #_{:disable-serialize? true})
                            (graphql-utils/add-bignumber-type))
                        (:query params)
                        (graphql-utils/clj->js-root-value @response-root-value)
@@ -125,7 +126,7 @@
 (def mount-args {:schema schema :url "http://localhost:1234/" :fetch-opts {:customFetch custom-fetch}})
 
 
-#_(deftest basic-query
+(deftest basic-query
   (run-test-async
     (-> (mount/with-args {:graphql mount-args})
       (mount/start))
@@ -183,7 +184,7 @@
               (is (= "Street 1" (:user/address @(subscribe [::subs/entity :user 1]))))
               (is (= "b" (:param/db @(subscribe [::subs/entity :parameter {:param/id 123 :param/db "b"}])))))))))))
 
-#_(deftest auth-token-test
+(deftest auth-token-test
   (let [request (atom nil)]
     (run-test-async
       (-> (mount/with-args {:graphql (assoc-in mount-args [:fetch-opts :customFetch] (fn [_ req]
@@ -205,7 +206,7 @@
                           (.. @request -headers -authorization))))))))))
 
 
-#_(deftest query-batching
+(deftest query-batching
   (run-test-async
     (-> (mount/with-args {:graphql mount-args})
       (mount/start))
@@ -255,7 +256,7 @@
           (is (= true (:user/active? @(subscribe [::subs/entity :user 1])))))))))
 
 
-#_(deftest query-variables
+(deftest query-variables
   (run-test-async
     (-> (mount/with-args {:graphql mount-args})
       (mount/start))
@@ -303,7 +304,7 @@
           (is (= "abcd" (:user/address @(subscribe [::subs/entity :user "abcd"])))))))))
 
 
-#_(deftest query-fragments
+(deftest query-fragments
   (run-test-async
     (-> (mount/with-args {:graphql mount-args})
       (mount/start))
@@ -370,7 +371,7 @@
           (is (= "b" (:param/db @(subscribe [::subs/entity :parameter {:param/id "key1" :param/db "b"}])))))))))
 
 
-#_(deftest query-refetching
+(deftest query-refetching
   (run-test-async
     (let [total-count (atom 0)]
       (-> (mount/with-args {:graphql mount-args})
@@ -394,17 +395,17 @@
           (wait-for [::events/normalize-response]
             (is (= {:total-count 2} (:search-users @query1)))))))))
 
-
 (deftest resolver-middleware
+
   (run-test-async
    (try
      (let [middleware1 {:root-value
                         {:search-users
-                         (fn [{:keys [:user/registered-after]}]
-                           ;; TODO: figure out who converts registered-after to a long
-                           (println "HEREEEEEEEEEE " registered-after (t/date-time 2018 10 10))
-                           #_(when-not (t/equal? registered-after (t/date-time 2018 10 10))
-                               (throw (js/Error. "Pass registered-after is not correct" registered-after)))
+                         (fn [{:keys [:user/registered-after :some]}]
+
+                           (when-not (t/equal? registered-after (t/date-time 2018 10 10))
+                             (throw (js/Error. "Pass registered-after is not correct" registered-after)))
+
                            {:total-count 2
                             :items (constantly
                                     [{:user/id (fn []
@@ -455,7 +456,7 @@
                                                                           (create-resolver-middleware :middleware2 middleware2)]})})
                    (mount/start))])
 
-     (set-response! {:search-users (fn [{:keys [:user/registered-after :user/age]}]
+     (set-response! {:search-users (fn [{:keys [:user/registered-after :user/age :some]}]
                                      (println "Inside Resolver" registered-after)
                                      {:total-count 1
                                       :items (constantly
@@ -471,7 +472,7 @@
                                                                [{:param/id 123
                                                                  :param/db "bCC"
                                                                  :param/key "key1"
-                                                                 :param/other-key other-key
+                                                                  :param/other-key other-key
                                                                  :param/creator (fn []
                                                                                   {:user/id 5
                                                                                    :user/address "Street XYZ"})}])}])})
@@ -556,7 +557,7 @@
        (js/console.log e)))))
 
 
-#_(deftest subscription-id
+(deftest subscription-id
   (run-test-async
     (-> (mount/with-args {:graphql mount-args})
       (mount/start))
@@ -641,7 +642,7 @@
    }
   ")
 
-#_(deftest readme-tutorial
+(deftest readme-tutorial
   (run-test-async
     (-> (mount/with-args {:graphql (merge mount-args
                                           {:schema readme-tutorial-schema})})
@@ -709,7 +710,7 @@
           (is (= "Some Item" (:item/title @(subscribe [::subs/entity :item "xyz"])))))))))
 
 
-#_(deftest readme-tutorial-empty-items
+(deftest readme-tutorial-empty-items
   (run-test-async
     (-> (mount/with-args {:graphql (merge mount-args
                                           {:schema readme-tutorial-schema})})
@@ -746,7 +747,7 @@
                        :user/cart-items []})))))))
 
 
-#_(deftest mutation
+(deftest mutation
   (run-test-async
     (-> (mount/with-args {:graphql (merge mount-args
                                           {:schema schema})})

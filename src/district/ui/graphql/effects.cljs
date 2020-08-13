@@ -20,7 +20,6 @@
                :query-middlewares :schema] :as opts}]
 
     (let [non-middleware-fields [:on-error :on-request :on-response :on-success]
-
           {:keys [:query :variables :queries :responses]}
           (utils/apply-query-middlewares query-middlewares (apply dissoc opts non-middleware-fields))
 

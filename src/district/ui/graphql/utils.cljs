@@ -32,7 +32,7 @@
 
 (defn build-schema [schema]
   (let [sch (gql-build-schema schema)]
-    (js/console.log "Schema" sch)
+    (js/console.log "Schemaaaaa" sch)
     (-> sch
         (graphql-utils/add-keyword-type {:disable-serialize? true})
         (graphql-utils/add-date-type {:disable-serialize? true})
@@ -296,6 +296,9 @@
 
 
 (defn- scalar-arg-vals->str [v]
+  ;; TODO: thid should be renamed, since it is not always
+  ;; converting to string.
+  ;; What if a user adds another type?
   (cond
     (keyword? v)
     (cljs-utils/kw->str v)
@@ -406,7 +409,8 @@
                    value))
 
         (scalar-type-of? (aget info "returnType") "Date")
-        (tc/from-long value)
+        (do (println "WE ARE CALLING THIS" value (tc/from-long value))
+          (tc/from-long value))
 
         :else value))))
 
@@ -495,8 +499,8 @@
 
 (defn apply-query-middlewares [middlewares {:keys [:query :variables] :as opts}]
   (let [results (doall
-                  (reduce (fn [acc middleware]
-                            (let [{:keys [:query :variables :response]} ((:fn middleware) (merge opts acc))]
+                 (reduce (fn [acc middleware]
+                           (let [{:keys [:query :variables :response]} ((:fn middleware) (merge opts acc))]
                               {:query (or query (:query acc))
                                :queries (if query
                                           (conj (:queries acc) query)
