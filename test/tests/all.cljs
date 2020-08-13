@@ -126,7 +126,7 @@
 (def mount-args {:schema schema :url "http://localhost:1234/" :fetch-opts {:customFetch custom-fetch}})
 
 
-(deftest basic-query
+#_(deftest basic-query
   (run-test-async
     (-> (mount/with-args {:graphql mount-args})
       (mount/start))
@@ -184,7 +184,7 @@
               (is (= "Street 1" (:user/address @(subscribe [::subs/entity :user 1]))))
               (is (= "b" (:param/db @(subscribe [::subs/entity :parameter {:param/id 123 :param/db "b"}])))))))))))
 
-(deftest auth-token-test
+#_(deftest auth-token-test
   (let [request (atom nil)]
     (run-test-async
       (-> (mount/with-args {:graphql (assoc-in mount-args [:fetch-opts :customFetch] (fn [_ req]
@@ -206,7 +206,7 @@
                           (.. @request -headers -authorization))))))))))
 
 
-(deftest query-batching
+#_(deftest query-batching
   (run-test-async
     (-> (mount/with-args {:graphql mount-args})
       (mount/start))
@@ -256,7 +256,7 @@
           (is (= true (:user/active? @(subscribe [::subs/entity :user 1])))))))))
 
 
-(deftest query-variables
+#_(deftest query-variables
   (run-test-async
     (-> (mount/with-args {:graphql mount-args})
       (mount/start))
@@ -304,7 +304,7 @@
           (is (= "abcd" (:user/address @(subscribe [::subs/entity :user "abcd"])))))))))
 
 
-(deftest query-fragments
+#_(deftest query-fragments
   (run-test-async
     (-> (mount/with-args {:graphql mount-args})
       (mount/start))
@@ -371,7 +371,7 @@
           (is (= "b" (:param/db @(subscribe [::subs/entity :parameter {:param/id "key1" :param/db "b"}])))))))))
 
 
-(deftest query-refetching
+#_(deftest query-refetching
   (run-test-async
     (let [total-count (atom 0)]
       (-> (mount/with-args {:graphql mount-args})
@@ -395,7 +395,7 @@
           (wait-for [::events/normalize-response]
             (is (= {:total-count 2} (:search-users @query1)))))))))
 
-(deftest resolver-middleware
+(deftest resolver-middeware
 
   (run-test-async
    (try
@@ -423,6 +423,9 @@
                                       :user/params (fn [{:keys [:param/other-key]}]
                                                      (println "Resolving params for other-key" other-key)
                                                      (js/Promise. (fn [resolve]
+                                                                    (println "MID RETURNING" {:param/id 456
+                                                                                              :param/db "d"
+                                                                                              :param/other-key "77"})
                                                                     (resolve [{:param/id 456
                                                                                :param/db "d"
                                                                                :param/other-key "77"
@@ -457,7 +460,6 @@
                    (mount/start))])
 
      (set-response! {:search-users (fn [{:keys [:user/registered-after :user/age :some]}]
-                                     (println "Inside Resolver" registered-after)
                                      {:total-count 1
                                       :items (constantly
                                               [{:user/id 1
@@ -468,7 +470,10 @@
                                                 :user/favorite-numbers [1 2 3]
                                                 :user/active? true
                                                 :user/params (fn [{:keys [:param/other-key]}]
-                                                               (println "!>>>>>>>>!!!!!!!!!!!!!!!" other-key)
+                                                               (println "RESOLVER RETURNING" {:param/id 123
+                                                                                              :param/db "bCC"
+                                                                                              :param/key "key1"
+                                                                                              :param/other-key other-key})
                                                                [{:param/id 123
                                                                  :param/db "bCC"
                                                                  :param/key "key1"
@@ -526,9 +531,10 @@
                  (is (nil? (:graphql/errors @query1)))
                  (is (nil? (:graphql/errors @query2)))
 
-                 (let [{:keys [:items :total-count]} (:search-users @query1)
+                 (let [{:keys [:items :total-count] :as q1} (:search-users @query1)
                        {:keys [:user/address :user/registered-on :user/age :user/status :user/favorite-numbers :user/params :user/active?]}
                        (first items)]
+                   (println "QUERY1" q1)
                    (is (= 2 (:total-count (:search-users @query1))))
                    (is (= address "Street 2"))
                    (is (t/equal? registered-on (t/date-time 2018 9 9)))
@@ -557,7 +563,7 @@
        (js/console.log e)))))
 
 
-(deftest subscription-id
+#_(deftest subscription-id
   (run-test-async
     (-> (mount/with-args {:graphql mount-args})
       (mount/start))
@@ -642,7 +648,7 @@
    }
   ")
 
-(deftest readme-tutorial
+#_(deftest readme-tutorial
   (run-test-async
     (-> (mount/with-args {:graphql (merge mount-args
                                           {:schema readme-tutorial-schema})})
@@ -710,7 +716,7 @@
           (is (= "Some Item" (:item/title @(subscribe [::subs/entity :item "xyz"])))))))))
 
 
-(deftest readme-tutorial-empty-items
+#_(deftest readme-tutorial-empty-items
   (run-test-async
     (-> (mount/with-args {:graphql (merge mount-args
                                           {:schema readme-tutorial-schema})})
@@ -747,7 +753,7 @@
                        :user/cart-items []})))))))
 
 
-(deftest mutation
+#_(deftest mutation
   (run-test-async
     (-> (mount/with-args {:graphql (merge mount-args
                                           {:schema schema})})

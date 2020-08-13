@@ -32,7 +32,6 @@
 
 (defn build-schema [schema]
   (let [sch (gql-build-schema schema)]
-    (js/console.log "Schemaaaaa" sch)
     (-> sch
         (graphql-utils/add-keyword-type {:disable-serialize? true})
         (graphql-utils/add-date-type {:disable-serialize? true})
@@ -282,12 +281,11 @@
     {:entities @entities
      :graph graph}))
 
-
 (defn normalize-response [data query-clj opts]
   (-> data
-    (response-replace-aliases query-clj)
-    (->> (walk/postwalk identity))                          ;; ¯\_(ツ)_/¯ contextualize otherwise throws error, couldn't figure it out
-    (replace-entities-with-refs (query-clj-replace-aliases query-clj) opts)))
+      (response-replace-aliases query-clj)
+      (->> (walk/postwalk identity))                          ;; ¯\_(ツ)_/¯ contextualize otherwise throws error, couldn't figure it out
+      (replace-entities-with-refs (query-clj-replace-aliases query-clj) opts)))
 
 
 (defn- scalar-type-of? [x scalar-type-name]
@@ -409,8 +407,7 @@
                    value))
 
         (scalar-type-of? (aget info "returnType") "Date")
-        (do (println "WE ARE CALLING THIS" value (tc/from-long value))
-          (tc/from-long value))
+        (tc/from-long value)
 
         :else value))))
 

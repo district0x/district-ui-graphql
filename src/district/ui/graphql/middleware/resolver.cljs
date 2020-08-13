@@ -38,9 +38,6 @@
 
 
 (defn- mask-field-resolver [root-value args context info]
-  #_(try
-    (throw (js/Error. "DUMMY"))
-    (catch js/Error e (println "STACK" (.-stack e))))
   (let [return-type (aget info "returnType")
         value (aget root-value (aget info "fieldName"))
         value (cond
@@ -79,9 +76,6 @@
   (utils/create-middleware
     id
     (fn [{:keys [:schema :query :variables :gql-name->kw]}]
-      (try
-    (throw (js/Error. "DUMMY"))
-    (catch js/Error e (println "STACK" (.-stack e))))
       (let [context (merge context {:db re-frame.db/app-db})
             query-str (print-str-graphql query)
             variables (clj->js variables)
