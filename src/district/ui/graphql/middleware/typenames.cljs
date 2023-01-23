@@ -39,12 +39,10 @@
                                                      node))
                                                  js/undefined)
                                                js/undefined))})]
-    {:response (-> (gql-sync schema
-                             (print-str-graphql typenames-query)
-                             nil
-                             nil
-                             (clj->js variables)
-                             nil
-                             field-resolver))}))
+
+    {:response (-> (gql-sync #js {:schema (utils/ignore-null schema)
+                                  :source (print-str-graphql typenames-query)
+                                  :variableValues (clj->js variables)
+                                  :fieldResolver field-resolver}))}))
 
 

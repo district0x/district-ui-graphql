@@ -371,8 +371,6 @@ Then the subscription will return collection of all query results.
 ### Mutations
 This module supports [GraphQL mutations](https://graphql.org/learn/queries/#mutations) with proper normalisation of response data. 
 
-**Important Note:** Currently, if you want to normalise mutation response into entities, you must explicitly ask for `:__typename` in a response query, as seen in example:
-
 ```clojure
 ;; Let's assume following schema:
 (def schema "
@@ -410,21 +408,37 @@ This module supports [GraphQL mutations](https://graphql.org/learn/queries/#muta
                                          [:user/id
                                           :user/age
                                           :user/favorite-numbers
-                                          :__typename
                                           [:user/params {:param/other-key "kek"}
                                            [:param/db
-                                            :param/other-key
-                                            :__typename]]]]
+                                            :param/other-key]]]]
                                         [:add-parameter {:param/id "tor"
                                                          :param/db "db2"}
                                          [:param/id
-                                          :param/db
-                                          :__typename]]
+                                          :param/db]]
                                         [:set-checkpoint]]}])  
   
   ;; In case we need to get response from :set-checkpoint in the UI, we can use:
   @(subscribe [::subs/query {:queries [[:set-checkpoint]]}
                             {:disable-fetch? true}])
+
+
+;; Additionally, we can also specify an event handler to trigger when the mutation results are available
+
+(reg-event-fx
+  ::mutation-success
+  (fn [_ [_ results]]
+    (do-something results)))
+
+(reg-event-fx
+  ::mutation-error
+  (fn [_ [_ error]]
+    (print error)))
+
+
+(dispatch [::events/mutation {:queries [[:set-checkpoint]]
+                              :on-success [::mutation-success]
+                              :on-error [::mutation-failed]}])
+
 ```
 
 
@@ -492,6 +506,7 @@ You can pass following args to initiate this module:
 * `:url` URL of your HTTP GraphQL server
 * `:schema` GraphQL schema
 * `:query-middlewares` Collection of middlewares in order they'll be executed
+* `:disable-default-middlewares?` Disable the middlewares `typenames-middleware` and `id-fields-middleware`, active by default
 * `:kw->gql-name` Function to convert keyword into GraphQL field name. Default: [kw->gql-name](https://github.com/district0x/district-graphql-utils#kw-gql-name)
 * `:gql-name->kw` Function to convert GraphQL field name inyo keyword. Default: [gql-name->kw](https://github.com/district0x/district-graphql-utils#gql-name-kw)
 * `:fetch-opts` Parameter passed to create [apollo-fetch](https://github.com/apollographql/apollo-fetch)

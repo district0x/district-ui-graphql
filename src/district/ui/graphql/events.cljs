@@ -11,7 +11,6 @@
     [district.ui.graphql.middleware.typenames :refer [typenames-middleware]]
     [district.ui.graphql.queries :as queries]
     [district.ui.graphql.utils :as utils]
-    [graphql-query.core :refer [graphql-query]]
     [re-frame.core :refer [reg-event-fx reg-event-db trim-v]]
     [goog.object :as gobj]))
 
@@ -32,7 +31,7 @@
 (reg-event-fx
   ::start
   interceptors
-  (fn [{:keys [:db]} [{:keys [:schema :url :query-middlewares :fetch-opts] :as opts}]]
+  (fn [{:keys [:db]} [{:keys [:schema :url :query-middlewares :fetch-opts :disable-default-middlewares?] :as opts}]]
     (let [fetcher (when url
                     (doto (js/apolloFetch.createApolloFetch (clj->js (merge {:uri url} fetch-opts)))
                       (.use add-token-fetcher-middleware)))
@@ -50,8 +49,9 @@
                   :fetcher fetcher
                   :dataloader dataloader
                   :schema (utils/build-schema schema)
-                  :query-middlewares (concat [(utils/create-middleware :id-fields id-fields-middleware)
-                                              (utils/create-middleware :typenames typenames-middleware)]
+                  :query-middlewares (concat (when-not disable-default-middlewares?
+                                               [(utils/create-middleware :id-fields id-fields-middleware)
+                                                (utils/create-middleware :typenames typenames-middleware)])
                                              query-middlewares)}
                  (select-keys opts [:kw->gql-name :gql-name->kw]))))})))
 
@@ -85,49 +85,57 @@
 (reg-event-fx
   ::mutation
   interceptors
-  (fn [{:keys [:db]} [{:keys [:queries :variables] :as opts}]]
-    (let [{:keys [:url :kw->gql-name]} (queries/config db)
-          {:keys [:query :query-str] :as q} (utils/parse-query {:queries queries}
-                                                               {:kw->gql-name kw->gql-name})
-          opts (merge opts q)]
+  (fn [{:keys [:db]} [{:keys [:queries :query :variables :on-success :on-error] :as opts}]]
+    (let [query (cond->> query
+                        (some? queries) (merge-with into {:queries queries})
+                        true (merge {:operation {:operation/type :mutation
+                                                 :operation/name :a-mutation}}))
+          {:keys [:url :kw->gql-name :gql-name->kw :query-middlewares :fetcher :schema]} (queries/config db)
+          {:keys [:query :query-str]} (utils/parse-query query
+                                                               {:kw->gql-name kw->gql-name})]
 
-      {:http-xhrio {:method :post
-                    :uri url
-                    :params {:query (str "mutation " query-str)}
-                    :timeout 10000
-                    :response-format (ajax/json-response-format {:keywords? true})
-                    :format (ajax/json-request-format)
-                    :on-success [::mutation-success opts]
-                    :on-failure [::mutation-error opts]}})))
+      {::effects/fetch {:fetcher (queries/config db :fetcher)
+                        :query query
+                        :variables variables
+                        :on-success [::mutation-success {:on-success on-success}]
+                        :on-error [::mutation-error {:on-error on-error}]
+                        :gql-name->kw gql-name->kw
+                        :query-middlewares query-middlewares
+                        :schema schema}})))
 
 
 (reg-event-fx
   ::mutation-success
   interceptors
-  (fn [{:keys [:db]} [{:keys [:query :variables]} resp]]
-    (let [config (queries/config db)
-          resp (:data (graphql-utils/js->clj-response resp config))]
-
+  (fn [{:keys [:db]} [{:keys [:on-success]} resp {:keys [:query :query-str :variables]}]]
+    (let [config (queries/config db)]
       {:dispatch [::normalize-response resp {:query-clj (utils/query->clj
                                                           query
                                                           (:schema config)
                                                           (merge config
-                                                                 {:variables variables}))}]})))
+                                                                 {:variables variables}))
+                                             :query-str query-str
+                                             :variables variables
+                                             :on-normalization-success on-success}]})))
 
 
 (reg-event-fx
   ::mutation-error
   interceptors
-  (fn [{:keys [:db]} [errors {:keys [:query-str]}]]
-    {:dispatch [::set-query-errors {:errors errors :query-str query-str}]}))
-
+  (fn [{:keys [:db]} [{:keys [:on-error]} errors {:keys [:query-str]}]]
+    {:dispatch-n (cond-> [[::set-query-errors {:errors errors :query-str query-str}]]
+                         on-error (conj (vec (concat on-error [errors]))))}))
 
 (reg-event-fx
   ::normalize-response
   interceptors
-  (fn [{:keys [:db]} [response {:keys [:query-clj]}]]
+  (fn [{:keys [:db]} [response {:keys [:query-clj :query-str :variables :on-normalization-success]}]]
     (let [results (utils/normalize-response response query-clj (queries/config db))]
-      {:db (queries/merge-results db results)})))
+      (merge {:db (queries/merge-results db results)}
+             (when on-normalization-success
+                 (let [{:keys [:schema :gql-name->kw]} (queries/config db)
+                       {:keys [:data]} (utils/build-response-data schema query-str results variables gql-name->kw)]
+                   {:dispatch (vec (concat on-normalization-success [data]))}))))))
 
 
 (reg-event-fx

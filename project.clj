@@ -1,4 +1,4 @@
-(defproject district0x/district-ui-graphql "1.0.13-SNAPSHOT"
+(defproject district0x/district-ui-graphql "1.0.14-SNAPSHOT"
   :description "district UI module for GraphQL integration"
   :url "https://github.com/district0x/district-ui-graphql"
   :license {:name "Eclipse Public License"
@@ -13,8 +13,8 @@
                  [day8.re-frame/forward-events-fx "0.0.6"]
                  [day8.re-frame/http-fx "0.1.6"]
                  [district0x/district-cljs-utils "1.0.4"]
-                 [district0x/district-graphql-utils "1.0.10"]
-                 [district0x/graphql-query "1.0.4"]
+                 [district0x/district-graphql-utils "1.0.11"]
+                 [district0x/graphql-query "1.0.6"]
                  [district0x/contextual "0.2.0"]
                  [mount "0.1.16"]
                  [org.clojure/clojurescript "1.10.773"]
