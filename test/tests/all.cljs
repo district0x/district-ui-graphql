@@ -73,15 +73,14 @@
   (js/Promise.
     (fn [resolve]
       (let [{:strs [query variables]} (js->clj (js/JSON.parse (aget req "body")))
-            res (gql-sync (-> (build-schema @response-schema)
-                            (graphql-utils/add-keyword-type)
-                            (graphql-utils/add-date-type)
-                            (graphql-utils/add-bignumber-type))
-                          query
-                          (graphql-utils/clj->js-root-value @response-root-value)
-                          {}
-                          (clj->js variables)
-                          nil)]
+            res (gql-sync #js {:schema (-> (build-schema @response-schema)
+                                           (graphql-utils/add-keyword-type)
+                                           (graphql-utils/add-date-type)
+                                           (graphql-utils/add-bignumber-type))
+                               :source query
+                               :rootValue (graphql-utils/clj->js-root-value @response-root-value)
+                               :contextValue {}
+                               :variableValues (clj->js variables)})]
         (let [body (js/JSON.stringify res)]
           (resolve (js/Response. (clj->js body) (clj->js {:status 200}))))))))
 
@@ -204,7 +203,7 @@
 
     (set-response! {:params (fn [{:keys [:db :keys]}]
                               (for [key keys]
-                                {:param/id key
+                                {:param/id (graphql-utils/gql-name->kw key)
                                  :param/db db
                                  :param/key key
                                  :param/other-key "11"
@@ -213,16 +212,16 @@
                                                    :user/active? true})}))})
 
     (let [query2 (subscribe [::subs/query
-                             {:queries [{:query/data [:params {:db "a" :keys [:abc/key1 :key2]}
-                                                      [:param/db
-                                                       :param/key
-                                                       [:param/creator [:user/active?]]]]
+                             {:queries [{:query/data  [:params {:db "a" :keys [:abc/key-one :key-two]}
+                                                       [:param/db
+                                                        :param/key
+                                                        [:param/creator [:user/active?]]]]
                                          :query/alias :my-params}
-                                        [:params {:db "b" :keys [:key3]}
+                                        [:params {:db "b" :keys [:key-three]}
                                          [:param/db :param/other-key]]]}
                              {:consider-preprocessing-as-loading? false}])
           query3 (subscribe [::subs/query
-                             {:queries [[:params {:db "b" :keys [:key3]}
+                             {:queries [[:params {:db "b" :keys [:key-three]}
                                          [:param/db
                                           {:field/data [:param/key]
                                            :field/alias :param/my-key}]]]}])]
@@ -236,14 +235,14 @@
         (is (nil? (:graphql/errors @query3)))
         (let [{:keys [:my-params :params]} @query2]
 
-          (is (= my-params [{:param/db "a" :param/key :abc/key1 :param/creator {:user/active? true}}
-                            {:param/db "a" :param/key :key2 :param/creator {:user/active? true}}]))
+          (is (= my-params [{:param/db "a" :param/key :abc/key-one :param/creator {:user/active? true}}
+                            {:param/db "a" :param/key :key-two :param/creator {:user/active? true}}]))
           (is (= params [{:param/db "b" :param/other-key "11"}]))
-          (is (= (:params @query3) [{:param/db "b" :param/my-key :key3}]))
+          (is (= (:params @query3) [{:param/db "b" :param/my-key :key-three}]))
 
-          (is (= "a" (:param/db @(subscribe [::subs/entity :parameter {:param/id :abc/key1 :param/db "a"}]))))
-          (is (= "a" (:param/db @(subscribe [::subs/entity :parameter {:param/id :key2 :param/db "a"}]))))
-          (is (= "b" (:param/db @(subscribe [::subs/entity :parameter {:param/id :key3 :param/db "b"}]))))
+          (is (= "a" (:param/db @(subscribe [::subs/entity :parameter {:param/id :abc/key-one :param/db "a"}]))))
+          (is (= "a" (:param/db @(subscribe [::subs/entity :parameter {:param/id :key-two :param/db "a"}]))))
+          (is (= "b" (:param/db @(subscribe [::subs/entity :parameter {:param/id :key-three :param/db "b"}]))))
           (is (= true (:user/active? @(subscribe [::subs/entity :user 1])))))))))
 
 
@@ -402,7 +401,7 @@
                                       :user/address "Street 2"
                                       :user/status (fn []
                                                      (js/Promise. (fn [resolve]
-                                                                    (resolve :user.status/active))))
+                                                                    (resolve (graphql-utils/kw->gql-name :user.status/active)))))
                                       :user/registered-on (constantly (t/date-time 2018 9 9))
                                       :user/age (constantly (bn/number "10e10"))
                                       :user/favorite-numbers (fn []
@@ -427,7 +426,7 @@
                                                    (for [key keys]
                                                      {:param/id (fn []
                                                                   (js/Promise. (fn [resolve]
-                                                                                 (resolve key))))
+                                                                                 (resolve (graphql-utils/gql-name->kw key)))))
                                                       :param/db db
                                                       :param/key (constantly key)
                                                       :param/other-key (fn []
@@ -463,7 +462,7 @@
                                                                                    :user/address "Street XYZ"})}])}])})
                     :params (fn [{:keys [:db :keys]}]
                               (for [key keys]
-                                {:param/id key
+                                {:param/id (graphql-utils/gql-name->kw key)
                                  :param/db db
                                  :param/key key
                                  :param/other-key "11"
@@ -493,12 +492,12 @@
           query2 (subscribe [::subs/query
                              {:operation {:operation/type :query
                                           :operation/name :some-query}
-                              :queries [{:query/data [:params {:db :$a :keys [:abc/key1 :key2]}
+                              :queries [{:query/data [:params {:db :$a :keys [:abc/key-one :key-two]}
                                                       [:param/db
                                                        :param/key
                                                        [:param/creator [:user/active?]]]]
                                          :query/alias :my-params}
-                                        [:params {:db :$b :keys [:key3]}
+                                        [:params {:db :$b :keys [:key-three]}
                                          [:param/db :param/other-key]]]
                               :variables [{:variable/name :$a
                                            :variable/type :String!}
@@ -529,13 +528,13 @@
 
         (let [{:keys [:my-params :params]} @query2]
 
-          (is (= my-params [{:param/db "a" :param/key :abc/key1 :param/creator {:user/active? false}}
-                            {:param/db "a" :param/key :key2 :param/creator {:user/active? false}}]))
+          (is (= my-params [{:param/db "a" :param/key :abc/key-one :param/creator {:user/active? false}}
+                            {:param/db "a" :param/key :key-two :param/creator {:user/active? false}}]))
           (is (= params [{:param/db "b" :param/other-key "99"}]))
 
-          (is (= "a" (:param/db @(subscribe [::subs/entity :parameter {:param/id :abc/key1 :param/db "a"}]))))
-          (is (= "a" (:param/db @(subscribe [::subs/entity :parameter {:param/id :key2 :param/db "a"}]))))
-          (is (= "b" (:param/db @(subscribe [::subs/entity :parameter {:param/id :key3 :param/db "b"}]))))
+          (is (= "a" (:param/db @(subscribe [::subs/entity :parameter {:param/id :abc/key-one :param/db "a"}]))))
+          (is (= "a" (:param/db @(subscribe [::subs/entity :parameter {:param/id :key-two :param/db "a"}]))))
+          (is (= "b" (:param/db @(subscribe [::subs/entity :parameter {:param/id :key-three :param/db "b"}]))))
           (is (= false (:user/active? @(subscribe [::subs/entity :user 2])))))))))
 
 
@@ -732,7 +731,8 @@
 (deftest mutation
   (run-test-async
     (-> (mount/with-args {:graphql (merge mount-args
-                                          {:schema schema})})
+                                          {:schema schema
+                                           :disable-default-middlewares? true})})
       (mount/start))
 
     (set-response! {:add-user (fn [args]
@@ -785,3 +785,119 @@
             (is (= "db2" (:param/db param)))
 
             (is (true? (:set-checkpoint query1)))))))))
+
+
+(deftest mutation-with-middlewares
+  (run-test-async
+    (-> (mount/with-args {:graphql (merge mount-args
+                                          {:schema schema})})
+      (mount/start))
+
+    (set-response! {:add-user (fn [args]
+                                (merge
+                                  args
+                                  {:user/id "aaa"
+                                   :user/age 22
+                                   :user/params (fn [{:keys [:param/other-key]}]
+                                                  [{:param/id "param1"
+                                                    :param/db "db1"
+                                                    :param/other-key other-key}])}))
+                    :add-parameter (fn [args]
+                                     args)
+                    :set-checkpoint (fn []
+                                      true)}
+                   schema)
+
+    (dispatch [::events/mutation {:queries [[:add-user {:user/address "Street 999"
+                                                        :user/age (bn/number "12e10")
+                                                        :user/favorite-numbers [2 3 9]}
+                                             [:user/id
+                                              :user/age
+                                              :user/favorite-numbers
+                                              [:user/params {:param/other-key "kek"}
+                                               [:param/db
+                                                :param/other-key]]]]
+                                            [:add-parameter {:param/id "tor"
+                                                             :param/db "db2"}
+                                             [:param/id
+                                              :param/db]]
+                                            [:set-checkpoint]]}])
+
+    (wait-for [::events/mutation-success ::events/mutation-error]
+      (wait-for [::events/normalize-response]
+        (let [user @(subscribe [::subs/entity :user "aaa"])
+              param @(subscribe [::subs/entity :parameter {:param/id "tor" :param/db "db2"}])
+              query1 @(subscribe [::subs/query {:queries [[:set-checkpoint]]}
+                                  {:disable-fetch? true}])]
+          (is (= (:user/id user) "aaa"))
+          (is (= (:user/age user) 22))
+          (is (= (:user/favorite-numbers user) [2 3 9]))
+          (let [user-params (:id (first (get (:user/params user) {:param/other-key "kek"})))]
+            (is (= (:param/db user-params) "db1"))
+            (is (nil? (:param/other-key user-params)))
+
+            (is (= "tor" (:param/id param)))
+            (is (= "db2" (:param/db param)))
+
+            (is (true? (:set-checkpoint query1)))))))))
+
+
+(reg-event-fx
+  :check-mutation-results
+  (fn [_ [_ check-fn results]]
+    (if (check-fn results)
+      (dispatch [:mutation-ok])
+      (dispatch [:mutation-fail]))))
+
+(reg-event-fx
+  :mutation-ok
+  (constantly nil))
+
+(reg-event-fx
+  :mutation-fail
+  (constantly nil))
+
+
+(deftest mutation-dispatch
+  (run-test-async
+    (-> (mount/with-args {:graphql (merge mount-args
+                                          {:schema schema})})
+      (mount/start))
+
+    (set-response! {:add-user (fn [args]
+                                (merge
+                                  args
+                                  {:user/id "aaa"
+                                   :user/age 22
+                                   :user/params (fn [{:keys [:param/other-key]}]
+                                                  [{:param/id "param1"
+                                                    :param/db "db1"
+                                                    :param/other-key other-key}])}))
+                    :add-parameter (fn [args]
+                                     args)
+                    :set-checkpoint (fn []
+                                      true)}
+                   schema)
+
+    (dispatch [::events/mutation {:queries [[:add-user {:user/address "Street 999"
+                                                        :user/age (bn/number "12e10")
+                                                        :user/favorite-numbers [2 3 9]}
+                                             [:user/id
+                                              :user/age
+                                              :user/favorite-numbers
+                                              [:user/params {:param/other-key "kek"}
+                                               [:param/db
+                                                :param/other-key]]]]
+                                            [:add-parameter {:param/id "tor"
+                                                             :param/db "db2"}
+                                             [:param/id
+                                              :param/db]]
+                                            [:set-checkpoint]]
+                                  :on-success [:check-mutation-results (fn [results]
+                                                                         (and (= (-> results :add-user :user/id) "aaa")
+                                                                              (= (-> results :add-user :user/age) 22)
+                                                                              (= (-> results :add-user :user/favorite-numbers) [2 3 9])
+                                                                              (-> results :set-checkpoint)))]}])
+
+    (wait-for [::events/mutation-success ::events/mutation-error]
+      (wait-for [:mutation-ok :mutation-fail]))))

@@ -1,10 +1,8 @@
 (ns district.ui.graphql.queries
   (:require
     [district.cljs-utils :as cljs-utils]
-    [district.ui.graphql.utils :as utils]
-    [district.graphql-utils :as graphql-utils]))
+    [district.ui.graphql.utils :as utils]))
 
-(def gql-sync (aget js/GraphQL "graphqlSync"))
 (def db-key :district.ui.graphql)
 
 
@@ -68,14 +66,11 @@
                                         :or {consider-preprocessing-as-loading? true}}]]
   (let [gql-name->kw (config db :gql-name->kw)
         {:keys [:data :errors]}
-        (-> (gql-sync (config db :schema)
-                      query-str
-                      (results db)
-                      {}
-                      (clj->js variables)
-                      nil
-                      (utils/create-field-resolver {:gql-name->kw gql-name->kw}))
-          (graphql-utils/js->clj-response {:gql-name->kw gql-name->kw}))
+        (utils/build-response-data (config db :schema)
+                                   query-str
+                                   (results db)
+                                   variables
+                                   gql-name->kw)
         query-info (query->batched-query-info db query-str variables)]
     (merge data
            (when errors

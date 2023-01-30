@@ -79,13 +79,12 @@
       (let [context (merge context {:db re-frame.db/app-db})
             query-str (print-str-graphql query)
             variables (clj->js variables)
-            res (-> (gql-sync schema
-                              query-str
-                              (graphql-utils/clj->js-root-value (mask-root-value root-value))
-                              context
-                              variables
-                              nil
-                              mask-field-resolver)
+            res (-> (gql-sync #js {:schema schema
+                                   :source query-str
+                                   :rootValue (graphql-utils/clj->js-root-value (mask-root-value root-value))
+                                   :contextValue context
+                                   :variableValues variables
+                                   :fieldResolver mask-field-resolver})
                   graphql-utils/js->clj-response
                   response-remove-seqs)
             res-data (:data res)

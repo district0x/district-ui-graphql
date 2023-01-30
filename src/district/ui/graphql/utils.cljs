@@ -15,8 +15,10 @@
 
 (def parse-graphql (aget js/GraphQL "parse"))
 (def print-str-graphql (aget js/GraphQL "print"))
+(def print-schema-graphql (aget js/GraphQL "printSchema"))
 (def visit (aget js/GraphQL "visit"))
 (def gql-build-schema (aget js/GraphQL "buildSchema"))
+(def gql-sync (aget js/GraphQL "graphqlSync"))
 (def typename-field :__typename)
 
 (defn create-field-node [name]
@@ -31,11 +33,16 @@
 
 
 (defn build-schema [schema]
-  (cond-> schema
-    (string? schema) gql-build-schema
-    true (graphql-utils/add-keyword-type {:disable-serialize? true})
-    true (graphql-utils/add-date-type {:disable-serialize? true})
-    true (graphql-utils/add-bignumber-type)))
+  (let [schema (if (string? schema) (gql-build-schema schema) schema)]
+    (cond-> schema
+            (some? (aget schema "_typeMap" (:name graphql-utils/keyword-scalar-type-config)))
+            (graphql-utils/add-keyword-type {:disable-serialize? true})
+
+            (some? (aget schema "_typeMap" (:name graphql-utils/date-scalar-type-config)))
+            (graphql-utils/add-date-type {:disable-serialize? true})
+
+            (some? (aget schema "_typeMap" (:name graphql-utils/bignumber-scalar-type-config)))
+            (graphql-utils/add-bignumber-type))))
 
 
 (defn- ancestors->query-path [ancestors & [{:keys [:use-aliases? :gql-name->kw]
@@ -402,7 +409,7 @@
         (scalar-type-of? (aget info "returnType") "Keyword")
         (keyword (if (boolean? value)
                    (str value)
-                   value))
+                   (gql-name->kw value)))
 
         (scalar-type-of? (aget info "returnType") "Date")
         (tc/from-long value)
@@ -543,3 +550,32 @@
                                                                (contains? @used-variables (aget node "variable" "name" "value")))
                                                        js/undefined))}}))]
       new-query)))
+
+(defn build-response-data [schema query-str results variables gql-name->kw]
+  (-> (gql-sync #js {:schema schema
+                     :source query-str
+                     :rootValue results
+                     :contextValue {}
+                     :variableValues (clj->js variables)
+                     :fieldResolver (create-field-resolver {:gql-name->kw gql-name->kw})})
+      (graphql-utils/js->clj-response {:gql-name->kw gql-name->kw})))
+
+
+(defn ignore-null
+  "(experimental) Returns a clone of the schema but transforming the Non-null fields in their nullable equivalent.
+  For example type \"User {name: String!}\" is converted to \"User {name: String}\"
+  This is aimed to build middlewares which does not resolve the full query, so they don't need to worry about providing
+  values for each of the defined fields."
+  [schema]
+  (let [schema-clone (gql-build-schema (print-schema-graphql schema))]
+    (doseq [val (js/Object.values (aget schema-clone "_typeMap"))]
+      (when (instance? (aget js/GraphQL "GraphQLObjectType") val)
+        (doseq [field-val (js/Object.values (aget val "_fields"))]
+          (let [type (aget field-val "type")]
+            (when (instance? (aget js/GraphQL "GraphQLNonNull") type)
+              (aset field-val "type" (aget type "ofType"))))
+          (when-let [ast-node (aget field-val "astNode")]
+            (let [type (aget ast-node "type")]
+              (when (= (aget type "kind") "NonNullType")
+                (aset ast-node "type" (aget type "type"))))))))
+    schema-clone))
