@@ -319,7 +319,7 @@
 
 
 (defn- serialize-args [args {:keys [:gql-name->kw]}]
-  (let [args (js->clj args)
+  (let [args (graphql-utils/js->clj-objects args)
         args (when (seq args) (->> args
                                 (transform-keys gql-name->kw)
                                 (cljs-utils/transform-vals scalar-arg-vals->str)))]
@@ -351,7 +351,8 @@
                            (condp = (aget node "kind")
                              "Document" (m (aget node "definitions"))
                              "Name" (gql-name->kw (aget node "value"))
-                             "Argument" {(aget node "name") (aget node "value")}
+                             "Argument" (let [value (aget node "value")]
+                                          {(aget node "name") (if (= value :false) false value)})
                              "OperationDefinition" {:query
                                                     (with-meta (aget node "selectionSet")
                                                                {:operation (keyword (aget node "operation"))})}
@@ -371,15 +372,18 @@
                                        {(or (aget node "alias")
                                             (aget node "name"))
                                         (with-meta (or selection {}) (merge (meta selection) metadata))})
+                             "ObjectField" (let [value (aget node "value")]
+                                             {(aget node "name") (if (= value :false) false value)})
                              "IntValue" (js/parseInt (aget node "value"))
                              "FloatValue" (js/parseFloat (aget node "value"))
                              "NullValue" (aget node "value")
                              "StringValue" (aget node "value")
-                             "BooleanValue" (boolean (aget node "value"))
+                             "BooleanValue" (if (aget node "value") true :false)
                              "ListValue" (vec (aget node "values"))
-                             "ObjectValue" (aget node "value")
+                             "ObjectValue" (m (aget node "fields"))
                              "EnumValue" (aget node "value")
-                             "Variable" (get variables (aget node "name"))
+                             "Variable" (let [var (get variables (aget node "name"))]
+                                          (if (false? var) :false var))
                              "FragmentDefinition" {(keyword :fragment (aget node "name")) (aget node "selectionSet")}
                              "FragmentSpread" {(keyword :fragment (aget node "name")) {}}
                              js/undefined))})

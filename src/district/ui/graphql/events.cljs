@@ -107,16 +107,11 @@
 (reg-event-fx
   ::mutation-success
   interceptors
-  (fn [{:keys [:db]} [{:keys [:on-success]} resp {:keys [:query :query-str :variables]}]]
-    (let [config (queries/config db)]
-      {:dispatch [::normalize-response resp {:query-clj (utils/query->clj
-                                                          query
-                                                          (:schema config)
-                                                          (merge config
-                                                                 {:variables variables}))
-                                             :query-str query-str
-                                             :variables variables
-                                             :on-normalization-success on-success}]})))
+  (fn [{:keys [:db]} [{:keys [:on-success]} resp {:keys [:query :query-str :variables :query-clj]}]]
+    {:dispatch [::normalize-response resp {:query-clj query-clj
+                                           :query-str query-str
+                                           :variables variables
+                                           :on-normalization-success on-success}]}))
 
 
 (reg-event-fx
