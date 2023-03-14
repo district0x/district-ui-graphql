@@ -1,9 +1,10 @@
 (ns district.ui.graphql.middleware.id-fields
   (:require
     [clojure.set :as set]
+    ["graphql" :as GraphQL]
     [district.ui.graphql.utils :as utils]))
 
-(def visit (aget js/GraphQL "visit"))
+(def visit (aget GraphQL "visit"))
 
 (defn id-fields-middleware [{:keys [:query :schema]}]
   {:query

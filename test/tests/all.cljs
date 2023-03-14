@@ -5,6 +5,7 @@
     [cljs.test :refer [deftest is testing run-tests async use-fixtures]]
     [day8.re-frame.test :refer [run-test-async run-test-sync wait-for]]
     [district.graphql-utils :as graphql-utils]
+    ["graphql" :as GraphQL]
     [district.ui.graphql.events :as events]
     [district.ui.graphql.middleware.resolver :refer [create-resolver-middleware]]
     [district.ui.graphql.subs :as subs]
@@ -13,11 +14,11 @@
     [re-frame.core :refer [reg-fx reg-event-fx subscribe reg-cofx reg-sub dispatch trim-v]]
     [re-frame.db :refer [app-db]]))
 
-
-(def gql-sync (aget js/GraphQL "graphqlSync"))
-(def gql (aget js/GraphQL "graphql"))
-(def build-schema (aget js/GraphQL "buildSchema"))
-(def parse-graphql (aget js/GraphQL "parse"))
+(set! (.-zeGraphQL js/window) GraphQL)
+(def gql-sync (aget GraphQL "graphqlSync"))
+(def gql (aget GraphQL "graphql"))
+(def build-schema (aget GraphQL "buildSchema"))
+(def parse-graphql (aget GraphQL "parse"))
 
 
 (def schema "
@@ -88,6 +89,7 @@
 (reg-fx
   :http-xhrio
   (fn [{:keys [:params :on-success]}]
+    (println ">>> HTTP-XHRIO" params)
     (println (graphql-utils/clj->js-root-value @response-root-value))
     (let [promise (gql (-> (build-schema @response-schema)
                          (graphql-utils/add-keyword-type)
@@ -113,7 +115,7 @@
   ::refetch-trigger-event
   (constantly nil))
 
-(def mount-args {:schema schema :url "http://localhost:1234/" :fetch-opts {:customFetch custom-fetch}})
+(def mount-args {:schema schema :url "http://d0x-vm:1234/" :fetch-opts {:customFetch custom-fetch}})
 
 
 (deftest basic-query
@@ -154,10 +156,13 @@
                                                                   :user/favorite-numbers
                                                                   [:user/params {:param/other-key "kek"}
                                                                    [:param/db :param/other-key]]]]]]]}])]
+        (println ">>> query1" @query1 (map #(= true %) (vals @query1)))
         (is (true? (:graphql/loading? @query1)))
         (is (true? (:graphql/preprocessing? @query1)))
+
         (wait-for [::events/normalize-response]
           (wait-for [::events/set-query-loading]
+            (println ">>> got normalize response and then set-query-loading" @query1)
             (is (not (:graphql/loading? @query1)))
             (let [{:keys [:items :total-count]} (:search-users @query1)
                   {:keys [:user/address :user/registered-on :user/age :user/status :user/favorite-numbers :user/params :user/active?]}

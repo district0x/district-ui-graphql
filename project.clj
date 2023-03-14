@@ -6,9 +6,9 @@
 
   :dependencies [[district0x/bignumber "1.0.3"]
                  [camel-snake-kebab "0.4.1"]
-                 [cljsjs/apollo-fetch "0.7.0-0"]
-                 [cljsjs/dataloader "1.4.0-0"]
-                 [cljsjs/graphql "0.13.1-0"]
+                 ; [cljsjs/apollo-fetch "0.7.0-0"]
+                 ; [cljsjs/dataloader "1.4.0-0"]
+                 ; [cljsjs/graphql "0.13.1-0"]
                  [com.andrewmcveigh/cljs-time "0.5.2"]
                  [day8.re-frame/forward-events-fx "0.0.6"]
                  [day8.re-frame/http-fx "0.1.6"]

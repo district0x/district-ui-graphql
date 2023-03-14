@@ -1,13 +1,14 @@
 (ns district.ui.graphql.middleware.resolver
   (:require
+    ["graphql" :as GraphQL]
     [clojure.walk :as walk]
     [district.graphql-utils :as graphql-utils]
     [district.ui.graphql.utils :as utils]))
 
-(def visit (aget js/GraphQL "visit"))
-(def gql-sync (aget js/GraphQL "graphqlSync"))
-(def gql (aget js/GraphQL "graphql"))
-(def print-str-graphql (aget js/GraphQL "print"))
+(def visit (aget GraphQL "visit"))
+(def gql-sync (aget GraphQL "graphqlSync"))
+(def gql (aget GraphQL "graphql"))
+(def print-str-graphql (aget GraphQL "print"))
 
 
 (defn- mask-value [value]
@@ -48,12 +49,12 @@
                 :else value)]
 
     (cond
-      (and (instance? (aget js/GraphQL "GraphQLObjectType") return-type)
+      (and (instance? (aget GraphQL "GraphQLObjectType") return-type)
            (not (object? value))
            value)
       (clj->js {"promise?" true})
 
-      (and (instance? (aget js/GraphQL "GraphQLList") return-type)
+      (and (instance? (aget GraphQL "GraphQLList") return-type)
            (not (array? value))
            value)
       (js/Array. (clj->js {"promise?" true}))

@@ -1,12 +1,12 @@
 (ns district.ui.graphql.effects
   (:require
-    [cljsjs.graphql]
     [clojure.string :as string]
     [district.graphql-utils :as graphql-utils]
     [district.ui.graphql.utils :as utils]
+    ["graphql" :as GraphQL]
     [re-frame.core :refer [reg-fx dispatch]]))
 
-(def print-str-graphql (aget js/GraphQL "print"))
+(def print-str-graphql (aget GraphQL "print"))
 
 (reg-fx
   ::enqueue-query
@@ -49,7 +49,7 @@
                                                  (utils/merge-in-colls acc res)))
                                              {}
                                              resps)
-                                     (utils/remove-empty-typename-paths))] 
+                                     (utils/remove-empty-typename-paths))]
                          (when on-response
                            (dispatch (vec (concat on-response [res req-opts]))))
                          (if (empty? (:errors res))

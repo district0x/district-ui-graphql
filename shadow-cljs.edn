@@ -1,0 +1,10 @@
+{:dev-http {6502 {:root "out/browser-tests" :host "d0x-vm"}}
+ :nrepl {:port 30333}
+ :deps true
+ :builds
+ {:test-browser {:target :browser-test
+                 :ns-regexp "tests.(.+)"
+                 :test-dir "out/browser-tests"}
+  :test-ci {:target :karma
+            :ns-regexp "tests.(.+)"
+            :output-to "out/karma-tests.js"}}}

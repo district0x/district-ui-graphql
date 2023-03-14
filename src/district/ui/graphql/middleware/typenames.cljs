@@ -1,26 +1,27 @@
 (ns district.ui.graphql.middleware.typenames
   (:require
-    [district.ui.graphql.utils :as utils]))
+    [district.ui.graphql.utils :as utils]
+    ["graphql" :as GraphQL]))
 
 
-(def visit (aget js/GraphQL "visit"))
-(def gql-sync (aget js/GraphQL "graphqlSync"))
-(def print-str-graphql (aget js/GraphQL "print"))
+(def visit (aget GraphQL "visit"))
+(def gql-sync (aget GraphQL "graphqlSync"))
+(def print-str-graphql (aget GraphQL "print"))
 
 
 (defn- field-resolver [root-value args context info]
   (let [return-type (aget info "returnType")]
     (cond
-      (and (instance? (aget js/GraphQL "GraphQLObjectType") return-type))
+      (and (instance? (aget GraphQL "GraphQLObjectType") return-type))
       (js/Object.)
 
-      (and (instance? (aget js/GraphQL "GraphQLList") return-type)
-           (instance? (aget js/GraphQL "GraphQLObjectType") (aget return-type "ofType")))
+      (and (instance? (aget GraphQL "GraphQLList") return-type)
+           (instance? (aget GraphQL "GraphQLObjectType") (aget return-type "ofType")))
       ;; TODO QUESTION How do I know here if I'll be resolving to empty or not
       ;; since we don't know what resolver will apply
-      (js/Array. (js/Object.)) 
-      
-      :else nil))) 
+      (js/Array. (js/Object.))
+
+      :else nil)))
 
 
 (defn typenames-middleware [{:keys [:query :schema :variables :kw->gql-name]}]
