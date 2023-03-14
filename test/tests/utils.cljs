@@ -1,5 +1,6 @@
 (ns tests.utils
   (:require [cljs.test :refer [deftest is testing run-tests async use-fixtures]]
+            ["graphql" :as GraphQL]
             [district.ui.graphql.utils :as utils]))
 
 
@@ -11,7 +12,7 @@
                    :total-count 0}}})
          {:data {:search-users {:items [], :__typename "UserList", :total-count 0}}})))
 
-(def print-schema-graphql (aget js/GraphQL "printSchema"))
+(def print-schema-graphql (aget GraphQL "printSchema"))
 
 (def schema-str "
   type Query {

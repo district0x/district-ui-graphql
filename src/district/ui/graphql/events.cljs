@@ -1,8 +1,9 @@
 (ns district.ui.graphql.events
   (:require
     [ajax.core :as ajax]
-    [cljsjs.apollo-fetch]
-    [cljsjs.graphql]
+    ["apollo-fetch" :refer [createApolloFetch]]
+    ; ["@apollo/client" :refer [ApolloClient ApolloLink HttpLink] :rename {concat apollo-concat}]
+    ["graphql" :as graphql]
     [day8.re-frame.forward-events-fx]
     [day8.re-frame.http-fx]
     [district.graphql-utils :as graphql-utils]
@@ -33,7 +34,7 @@
   interceptors
   (fn [{:keys [:db]} [{:keys [:schema :url :query-middlewares :fetch-opts :disable-default-middlewares?] :as opts}]]
     (let [fetcher (when url
-                    (doto (js/apolloFetch.createApolloFetch (clj->js (merge {:uri url} fetch-opts)))
+                    (doto (createApolloFetch (clj->js (merge {:uri url} fetch-opts)))
                       (.use add-token-fetcher-middleware)))
           dataloader (utils/create-dataloader {:fetch-event [::fetch]
                                                :on-success [::normalize-response]

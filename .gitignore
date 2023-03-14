@@ -15,3 +15,7 @@ pom.xml.asc
 /tests-output/
 /district-ui-graphql.iml
 package-lock.json
+# shadow-cljs & deps migration ignores
+out
+.cpcache
+.shadow-cljs

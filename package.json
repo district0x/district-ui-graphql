@@ -1,0 +1,16 @@
+{
+  "dependencies": {
+    "@apollo/client": "3.7.9",
+    "dataloader": "2.2.2",
+    "graphql": "16.6.0",
+    "react": "17.0.1",
+    "react-dom": "17.0.1",
+    "shadow-cljs": "2.19.8"
+  },
+  "devDependencies": {
+    "karma": "6.3.0",
+    "karma-chrome-launcher": "2.2.0",
+    "karma-cli": "2.0.0",
+    "karma-cljs-test": "0.1.0"
+  }
+}

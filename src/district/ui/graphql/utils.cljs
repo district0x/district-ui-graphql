@@ -4,7 +4,8 @@
     [camel-snake-kebab.extras :refer [transform-keys]]
     [cljs-time.coerce :as tc]
     [cljs-time.core :as t]
-    [cljsjs.dataloader]
+    ["dataloader" :as DataLoader]
+    ["graphql" :as GraphQL]
     [clojure.set :as set]
     [clojure.walk :as walk]
     [contextual.core :as contextual]
@@ -13,12 +14,12 @@
     [graphql-query.core :refer [graphql-query]]
     [re-frame.core :refer [dispatch dispatch-sync]]))
 
-(def parse-graphql (aget js/GraphQL "parse"))
-(def print-str-graphql (aget js/GraphQL "print"))
-(def print-schema-graphql (aget js/GraphQL "printSchema"))
-(def visit (aget js/GraphQL "visit"))
-(def gql-build-schema (aget js/GraphQL "buildSchema"))
-(def gql-sync (aget js/GraphQL "graphqlSync"))
+(def parse-graphql (aget GraphQL "parse"))
+(def print-str-graphql (aget GraphQL "print"))
+(def print-schema-graphql (aget GraphQL "printSchema"))
+(def visit (aget GraphQL "visit"))
+(def gql-build-schema (aget GraphQL "buildSchema"))
+(def gql-sync (aget GraphQL "graphqlSync"))
 (def typename-field :__typename)
 
 (defn create-field-node [name]
@@ -96,8 +97,8 @@
             gql-type (if-let [typename (:typename field-name)]
                        (aget type-map typename)
                        (aget fields field-name "type"))
-            gql-type (if (or (instance? (aget js/GraphQL "GraphQLList") gql-type)
-                             (instance? (aget js/GraphQL "GraphQLNonNull") gql-type))
+            gql-type (if (or (instance? (aget GraphQL "GraphQLList") gql-type)
+                             (instance? (aget GraphQL "GraphQLNonNull") gql-type))
                        (js-object-climb gql-type "ofType")
                        gql-type)]
         (if (= 1 (count query-path-rest))
@@ -110,7 +111,7 @@
   (->> (cljs-utils/js-obj->clj (js-invoke gql-type "getFields"))
     (filter (fn [[_ v]]
               (let [gql-type (aget v "type")
-                    name (if (instance? (aget js/GraphQL "GraphQLNonNull") gql-type)
+                    name (if (instance? (aget GraphQL "GraphQLNonNull") gql-type)
                            (aget gql-type "ofType" "name")
                            (aget gql-type "name"))]
                 (= name "ID"))))
@@ -297,7 +298,7 @@
 
 
 (defn- scalar-type-of? [x scalar-type-name]
-  (and (instance? (aget js/GraphQL "GraphQLScalarType") x)
+  (and (instance? (aget GraphQL "GraphQLScalarType") x)
        (= (aget x "name") scalar-type-name)))
 
 
@@ -465,7 +466,7 @@
   (let [dt (atom nil)]
     (reset!
       dt
-      (js/DataLoader.
+      (new DataLoader
         (fn [query-configs]
           (let [query-configs (vec query-configs)
                 {batched-query :query
@@ -573,10 +574,10 @@
   [schema]
   (let [schema-clone (gql-build-schema (print-schema-graphql schema))]
     (doseq [val (js/Object.values (aget schema-clone "_typeMap"))]
-      (when (instance? (aget js/GraphQL "GraphQLObjectType") val)
+      (when (instance? (aget GraphQL "GraphQLObjectType") val)
         (doseq [field-val (js/Object.values (aget val "_fields"))]
           (let [type (aget field-val "type")]
-            (when (instance? (aget js/GraphQL "GraphQLNonNull") type)
+            (when (instance? (aget GraphQL "GraphQLNonNull") type)
               (aset field-val "type" (aget type "ofType"))))
           (when-let [ast-node (aget field-val "astNode")]
             (let [type (aget ast-node "type")]
