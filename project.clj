@@ -14,7 +14,7 @@
                  [day8.re-frame/http-fx "0.1.6"]
                  [district0x/district-cljs-utils "1.0.4"]
                  [district0x/district-graphql-utils "1.0.11"]
-                 [district0x/graphql-query "1.0.6"]
+                 [is.d0x/graphql-query "1.0.7"]
                  [district0x/contextual "0.2.0"]
                  [mount "0.1.16"]
                  [org.clojure/clojurescript "1.10.773"]
