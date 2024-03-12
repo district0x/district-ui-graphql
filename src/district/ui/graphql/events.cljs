@@ -83,6 +83,26 @@
 
 
 (reg-event-fx
+  ::query!
+  interceptors
+  (fn [{:keys [:db]} [{:keys [:queries :query :variables :on-success :on-error] :as opts}]]
+    (let [query (cond->> query
+                        (some? queries) (merge-with into {:queries queries})
+                        true (merge {:operation {:operation/type :query
+                                                 :operation/name :a-query}}))
+          {:keys [:url :kw->gql-name :gql-name->kw :query-middlewares :fetcher :schema]} (queries/config db)
+          {:keys [:query :query-str]} (utils/parse-query query {:kw->gql-name kw->gql-name})]
+
+      {::effects/fetch {:fetcher (queries/config db :fetcher)
+                        :query query
+                        :variables variables
+                        :on-success [::mutation-success {:on-success on-success}]
+                        :on-error [::mutation-error {:on-error on-error}]
+                        :gql-name->kw gql-name->kw
+                        :query-middlewares query-middlewares
+                        :schema schema}})))
+
+(reg-event-fx
   ::mutation
   interceptors
   (fn [{:keys [:db]} [{:keys [:queries :query :variables :on-success :on-error] :as opts}]]
