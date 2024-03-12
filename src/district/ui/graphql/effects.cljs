@@ -49,7 +49,7 @@
                                                  (utils/merge-in-colls acc res)))
                                              {}
                                              resps)
-                                     (utils/remove-empty-typename-paths))] 
+                                     (utils/remove-empty-typename-paths))]
                          (when on-response
                            (dispatch (vec (concat on-response [res req-opts]))))
                          (if (empty? (:errors res))
